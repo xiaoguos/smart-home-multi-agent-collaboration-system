@@ -1,0 +1,96 @@
+services:
+  starrocks-fe:
+    image: starrocks/fe-ubuntu:3.4-latest
+    container_name: moss-ai-starrocks-fe
+    hostname: starrocks-fe
+    ports:
+      - "9030:9030"  
+      - "8030:8030" 
+    environment:
+      - FE_SERVERS=fe1:starrocks-fe:9010
+      - FE_ID=1
+      - JAVA_OPTS=-Xmx1024m -XX:+UseG1GC
+      - STARROCKS_ROOT_PASSWORD=123456
+    volumes:
+      - starrocks-fe-meta:/opt/starrocks/fe/meta
+      - starrocks-fe-log:/opt/starrocks/fe/log
+    networks:
+      - moss-ai-network
+    command: ["sh", "-c", "cd /opt/starrocks/fe && ./bin/start_fe.sh && sleep infinity"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  starrocks-be:
+    image: starrocks/be-ubuntu:3.4-latest
+    container_name: moss-ai-starrocks-be
+    hostname: starrocks-be
+    environment:
+      - FE_SERVERS=fe1:starrocks-fe:9010
+      - BE_ADDR=starrocks-be:9050
+      - JAVA_OPTS=-Xmx1536m -XX:+UseG1GC
+    volumes:
+      - starrocks-be-storage:/opt/starrocks/be/storage
+      - starrocks-be-log:/opt/starrocks/be/log
+    networks:
+      - moss-ai-network
+    depends_on:
+      - starrocks-fe
+    command: ["sh", "-c", "cd /opt/starrocks/be && ./bin/start_be.sh && sleep infinity"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  starrocks-cn:
+    image: starrocks/cn-ubuntu:3.4-latest
+    container_name: moss-ai-starrocks-cn
+    hostname: starrocks-cn
+    environment:
+      - FE_SERVERS=fe1:starrocks-fe:9010
+      - CN_ADDR=starrocks-cn:9051
+      - JAVA_OPTS=-Xmx1024m -XX:+UseG1GC
+    volumes:
+      - starrocks-cn-storage:/opt/starrocks/cn/storage
+      - starrocks-cn-log:/opt/starrocks/cn/log
+    networks:
+      - moss-ai-network
+    depends_on:
+      - starrocks-fe
+    command: ["sh", "-c", "cd /opt/starrocks/cn && ./bin/start_backend.sh --cn && sleep infinity"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  starrocks-fe-meta:
+    driver: local
+  starrocks-fe-log:
+    driver: local
+  starrocks-be-storage:
+    driver: local
+  starrocks-be-log:
+    driver: local
+  starrocks-cn-storage:
+    driver: local
+  starrocks-cn-log:
+    driver: local
+  
+networks:
+  moss-ai-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+          gateway: 192.168.100.1
