@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # 智能家居代理系统
+  smart-home-agents:
+    build: .
+    container_name: smart-home-agents
+    ports:
+      - "12000:12000"  # 空调代理
+      - "12001:12001"  # 空气净化器代理
+      - "12002:12002"  # 总管理代理
+      - "12003:12003"  # 数据挖掘代理
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - PYTHONPATH=/app
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - smart-home-network
+
+  # StarRocks 数据库 (可选，如果使用外部数据库可以删除)
+  starrocks-fe:
+    image: starrocks/fe-ubuntu:latest
+    container_name: starrocks-fe
+    ports:
+      - "9030:9030"  # FE HTTP端口
+      - "8030:8030"  # FE查询端口
+    environment:
+      - FE_SERVERS=fe1:172.26.92.141:9010
+      - FE_ID=1
+    volumes:
+      - starrocks-fe-data:/opt/starrocks/fe/meta
+    networks:
+      - smart-home-network
+    command: ["/opt/starrocks/fe/bin/start_fe.sh", "--daemon"]
+
+  starrocks-be:
+    image: starrocks/be-ubuntu:latest
+    container_name: starrocks-be
+    ports:
+      - "9060:9060"  # BE心跳端口
+    environment:
+      - FE_SERVERS=fe1:172.26.92.141:9010
+      - BE_ADDR=172.26.92.142:9050
+    volumes:
+      - starrocks-be-data:/opt/starrocks/be/storage
+    networks:
+      - smart-home-network
+    depends_on:
+      - starrocks-fe
+    command: ["/opt/starrocks/be/bin/start_be.sh", "--daemon"]
+
+  # Redis (用于缓存，可选)
+  redis:
+    image: redis:7-alpine
+    container_name: smart-home-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - smart-home-network
+    command: redis-server --appendonly yes
+
+  # Nginx (反向代理，可选)
+  nginx:
+    image: nginx:alpine
+    container_name: smart-home-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - smart-home-agents
+    networks:
+      - smart-home-network
+
+volumes:
+  starrocks-fe-data:
+  starrocks-be-data:
+  redis-data:
+
+networks:
+  smart-home-network:
+    driver: bridge
