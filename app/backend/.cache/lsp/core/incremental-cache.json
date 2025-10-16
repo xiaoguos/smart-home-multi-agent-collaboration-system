@@ -1,0 +1,14 @@
+{
+  "packageInformation": {
+    "core": {
+      "rootPackageName": "core",
+      "fileNameHash": "8741048060791297586",
+      "timeStamp": 1759586410,
+      "isBuilt": true,
+      "exeName": "main",
+      "hasSubPkgs": false
+    }
+  },
+  "jsonHash": "2889147379530791651",
+  "rootPackageName": "core"
+}

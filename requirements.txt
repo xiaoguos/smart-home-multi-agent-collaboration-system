@@ -1,0 +1,9 @@
+a2a-sdk[http-server]
+fastmcp>=0.5.0
+python-miio>=0.5.12 ; platform_system != "Windows"
+psutil>=5.9.0 ; platform_system == "Windows" and python_version >= "3.8"
+requests
+pycryptodome
+charset-normalizer
+Pillow
+colorama

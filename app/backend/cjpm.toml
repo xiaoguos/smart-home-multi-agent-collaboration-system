@@ -1,0 +1,19 @@
+[package]
+cjc-version = "1.0.0"
+name = "core"
+description = "nothing here"
+version = "1.0.0"
+target-dir = "dist"
+src-dir = "pkg/core"
+output-type = "executable"
+compile-option = ""
+override-compile-option = ""
+link-option = ""
+package-configuration = {  }
+
+[dependencies]
+
+
+[target.x86_64-w64-mingw32]
+  [target.x86_64-w64-mingw32.bin-dependencies]
+    path-option = ["D:\\Project\\cangjie_stdx\\dynamic\\stdx"]
