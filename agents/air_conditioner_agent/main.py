@@ -5,143 +5,97 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
-
+from a2a.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentSkill,
+)
+import sys
+import click
 import logging
-
-from tools import get_ac_status,set_ac_power,set_ac_temperature
+import uvicorn
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+import httpx
+from a2a.server.tasks import (
+    BasePushNotificationSender,
+    InMemoryPushNotificationConfigStore,
+    InMemoryTaskStore,
+)
+from executor import AirConditionerAgentExecutor
 
 memory = MemorySaver()
+from agent import AirConditionerAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
 class ResponseFormat(BaseModel):
     message: str
 
-class AirConditionerAgent:
-    SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    SYSTEM_PROMPT = (
-        '你是一个专门的家庭空调控制助手。'
-        '你的唯一目的是帮助用户控制他们的家庭空调系统。'
-        '你可以帮助调节温度、设置模式（制冷、制热、送风等）、'
-        '打开或关闭空调，以及提供节能建议。'
-        '如果用户询问与空调控制或相关主题无关的内容，'
-        '请礼貌地说明你无法帮助处理该主题，只能协助处理与空调相关的问题。'
-        '不要尝试回答无关问题或将工具用于其他目的。'
-        '当用户请求查询设备状态时，一定要调用工具 get_ac_status 获取最新状态，并将结果直接返回给用户；如工具返回 JSON，请原样返回或提取关键字段用中文概述。'
-        '当用户请求“启动/打开/关闭空调”等同义表达时，必须调用 set_ac_power(power: bool) 工具执行，并向用户反馈执行结果。'
-        '当用户请求设置温度（如“调到26度/设置到23℃”）时，必须调用 set_ac_temperature(temperature: int) 工具执行；如用户未给出明确温度，先向用户确认目标温度（范围16-30℃）。'
-        '当用户以语义描述温感（如“有点热/太热/冷一点/暖一点/舒服点/睡觉用”）而未给出具体温度时，按以下规则自动设置人类适宜温度：'
-        '1) 先调用 get_ac_status 获取当前 power、mode、tar_temp；若电源关闭且需要调温，先调用 set_ac_power(true)。'
-        '2) 若 mode 为 制冷/自动 且用户表达“有点热/太热/降温/冷一点”，将目标温度在当前基础上降低1-2℃（默认2℃），不低于24℃；若表达“有点冷/太冷/升温/暖一点”，则提高1-2℃（默认2℃），不高于30℃，然后调用 set_ac_temperature。'
-        '3) 若 mode 为 制热 且用户表达“有点冷/太冷/升温/暖一点”，在当前基础上提高1-2℃（默认2℃），不高于26℃；若表达“有点热/太热/降温/冷一点”，则降低1-2℃（默认2℃），不低于16℃，然后调用 set_ac_temperature。'
-        '4) 若用户表达“舒适/舒服点”，则：制冷模式设为26℃，制热模式设为22℃；若无法判断模式，则先查询状态后按模式执行。'
-        '5) 若用户表达“睡觉/睡眠”，则：制冷模式设为27℃，制热模式设为21℃。'
-        '所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。'
-    )
 
-    FORMAT_INSTRUCTION = (
-        '如果用户需要提供更多信息来完成请求，请将响应状态设置为 input_required。'
-        '如果在处理请求时出现错误，请将响应状态设置为 error。'
-        '如果请求已完成，请将响应状态设置为 completed。'
-    )
-    def __init__(self):
-        self.model = ChatOpenAI(
-                model='deepseek-chat',
-                openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
-                openai_api_base='https://api.deepseek.com',
-                temperature=0,
-            )
-        self.tools = [get_ac_status,set_ac_power,set_ac_temperature]
-
-        self.graph = create_react_agent(
-            self.model,
-            tools=self.tools,
-            checkpointer=memory,
-            prompt=self.SYSTEM_PROMPT,
+@click.command()
+@click.option("--host", "host", default="localhost")
+@click.option("--port", "port", default=12000)
+def main(host, port):
+    """Starts the Currency Agent server."""
+    try:
+        capabilities = AgentCapabilities(
+            type="air_conditioner",
+            supported_commands=["开启", "关闭", "查询状态"],
+            properties={
+                "current_temperature": 25,
+                "target_temperature": 26,
+                "power_state": "off",
+            },
+        )
+        skill = AgentSkill(
+            id="control_air_conditioner",
+            name="Air Conditioner Control",
+            description="控制家庭空调系统，包括温度，模式和电源设置",
+            tags=["air conditioning", "climate control", "home automation"],
+            examples=[
+                "Set AC to 22 degrees",
+                "Turn on the air conditioner",
+                "Change AC mode to cooling",
+            ],
+        )
+        agent_card = AgentCard(
+            name="Air Conditioner Agent",
+            description="家用空调系统控制的专业助手",
+            url=f"http://{host}:{port}/",
+            version="1.0.0",
+            default_input_modes=AirConditionerAgent.SUPPORTED_CONTENT_TYPES,
+            default_output_modes=AirConditionerAgent.SUPPORTED_CONTENT_TYPES,
+            capabilities=capabilities,
+            skills=[skill],
         )
 
-    async def stream(self, query, context_id) -> AsyncIterable[dict[str, Any]]:
-        inputs = {'messages': [('user', query)]}
-        config = {'configurable': {'thread_id': context_id}}
+        # --8<-- [start:DefaultRequestHandler]
+        httpx_client = httpx.AsyncClient()
+        push_config_store = InMemoryPushNotificationConfigStore()
+        push_sender = BasePushNotificationSender(
+            httpx_client=httpx_client, config_store=push_config_store
+        )
+        request_handler = DefaultRequestHandler(
+            agent_executor=AirConditionerAgentExecutor(),
+            task_store=InMemoryTaskStore(),
+            push_config_store=push_config_store,
+            push_sender=push_sender,
+        )
+        server = A2AStarletteApplication(
+            agent_card=agent_card, http_handler=request_handler
+        )
 
-        for item in self.graph.stream(inputs, config, stream_mode='values'):
-            message = item['messages'][-1]
-            if (
-                isinstance(message, AIMessage)
-                and message.tool_calls
-                and len(message.tool_calls) > 0
-            ):
-                tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in message.tool_calls]
-                if any(name == 'set_ac_power' for name in tool_names):
-                    tip = '正在切换空调电源…'
-                elif any(name == 'get_ac_status' for name in tool_names):
-                    tip = '正在查询空调设备状态…'
-                elif any(name == 'set_ac_temperature' for name in tool_names):
-                    tip = '正在设置空调温度…'
-                else:
-                    tip = '正在处理您的请求…'
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': tip,
-                }
-            elif isinstance(message, ToolMessage):
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': '已获取设备数据，正在整理结果…',
-                }
+        uvicorn.run(server.build(), host=host, port=port)
+        # --8<-- [end:DefaultRequestHandler]
 
-        yield self.get_agent_response(config)
+    except Exception as e:
+        logger.error(f"An error occurred during server startup: {e}")
+        sys.exit(1)
 
-    def _extract_text_from_message(self, msg: AIMessage | ToolMessage | Any) -> str:
-        try:
-            content = getattr(msg, 'content', None)
-            if isinstance(content, str):
-                return content
-            if isinstance(content, list):
-                parts = []
-                for part in content:
-                    if isinstance(part, dict) and 'text' in part:
-                        parts.append(part['text'])
-                if parts:
-                    return '\n'.join(parts)
-        except Exception:
-            pass
-        return ''
 
-    def get_agent_response(self, config):
-        current_state = self.graph.get_state(config)
-        messages = current_state.values.get('messages') if hasattr(current_state, 'values') else None
-
-        # 优先返回最近一次工具消息内容
-        if isinstance(messages, list) and messages:
-            for msg in reversed(messages):
-                if isinstance(msg, ToolMessage):
-                    tool_text = self._extract_text_from_message(msg)
-                    if tool_text:
-                        return {
-                            'is_task_complete': True,
-                            'require_user_input': False,
-                            'content': tool_text,
-                        }
-
-        # 回退到最后一条 AI 消息
-        final_text = ''
-        if isinstance(messages, list) and messages:
-            last_msg = messages[-1]
-            final_text = self._extract_text_from_message(last_msg)
-
-        if not final_text:
-            return {
-                'is_task_complete': False,
-                'require_user_input': True,
-                'content': '当前无法处理您的请求，请稍后重试。',
-            }
-
-        return {
-            'is_task_complete': True,
-            'require_user_input': False,
-            'content': final_text,
-        }
+if __name__ == "__main__":
+    main()
 

@@ -3,4 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="uv (a2a-hardware-serve)" />
   </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="uv (moss-ai)" project-jdk-type="Python SDK" />
 </project>

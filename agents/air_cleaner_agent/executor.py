@@ -17,7 +17,7 @@ from a2a.utils import (
 )
 from a2a.utils.errors import ServerError
 
-from main import AirConditionerAgent
+from agent import AirConditionerAgent
 
 
 logging.basicConfig(level=logging.INFO)
@@ -105,3 +105,4 @@ class AirConditionerAgentExecutor(AgentExecutor):
         self, context: RequestContext, event_queue: EventQueue
     ) -> None:
         raise ServerError(error=UnsupportedOperationError())
+

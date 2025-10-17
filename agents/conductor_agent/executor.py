@@ -17,18 +17,18 @@ from a2a.utils import (
 )
 from a2a.utils.errors import ServerError
 
-from main import DataMiningAgent
+from agent import ConductorAgent
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class DataMiningAgentExecutor(AgentExecutor):
-    """Data Mining AgentExecutor - 数据挖掘代理执行器."""
+class ConductorAgentExecutor(AgentExecutor):
+    """Conductor AgentExecutor - 总管理代理执行器."""
 
     def __init__(self):
-        self.agent = DataMiningAgent()
+        self.agent = ConductorAgent()
 
     async def execute(
         self,
@@ -73,13 +73,13 @@ class DataMiningAgentExecutor(AgentExecutor):
                 else:
                     await updater.add_artifact(
                         [Part(root=TextPart(text=item['content']))],
-                        name='data_mining_result',
+                        name='conductor_result',
                     )
                     await updater.complete()
                     break
             else:
                 # 如果没有内容，可以添加默认响应
-                default_response = "数据挖掘分析系统已接收您的请求，正在处理中..."
+                default_response = "智能家居管理系统已接收您的请求，正在处理中..."
                 await updater.update_status(
                     TaskState.working,
                     new_agent_text_message(
@@ -102,3 +102,4 @@ class DataMiningAgentExecutor(AgentExecutor):
         self, context: RequestContext, event_queue: EventQueue
     ) -> None:
         raise ServerError(error=UnsupportedOperationError())
+

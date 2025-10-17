@@ -32,7 +32,7 @@ async def main():
         message = Message(
             context_id=str(uuid4()),
             role='user',
-            parts=[Part(kind='text', text='关闭空调')],
+            parts=[Part(kind='text', text='开启空调')],
             message_id=uuid4().hex
         )
 

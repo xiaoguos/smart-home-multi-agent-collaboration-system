@@ -20,10 +20,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM 定位项目根目录
+echo 定位项目根目录...
+echo Locating project root directory...
+for %%I in (.) do set CURRENT_DIR=%%~nxI
+if "%CURRENT_DIR%"=="script" (
+    cd ..
+    echo 已从 script 目录切换到项目根目录
+    echo Switched from script directory to project root
+    echo.
+)
+
 REM 检查配置文件
 if not exist "config.yaml" (
     echo 错误: 未找到配置文件 config.yaml
     echo Error: Configuration file config.yaml not found
+    echo 当前目录: %CD%
+    echo Current directory: %CD%
     pause
     exit /b 1
 )
@@ -41,25 +54,25 @@ echo.
 REM 启动空调代理
 echo [1/4] 启动空调代理 (端口 12000)...
 echo [1/4] Starting Air Conditioner Agent (Port 12000)...
-start "Air Conditioner Agent" cmd /k "cd /d agents\air_conditioner_agent && python server.py --host localhost --port 12000"
+start "Air Conditioner Agent" cmd /k "cd /d agents\air_conditioner_agent && python main.py --host localhost --port 12000"
 timeout /t 2 /nobreak >nul
 
 REM 启动空气净化器代理
 echo [2/4] 启动空气净化器代理 (端口 12001)...
 echo [2/4] Starting Air Cleaner Agent (Port 12001)...
-start "Air Cleaner Agent" cmd /k "cd /d agents\air_cleaner_agent && python server.py --host localhost --port 12001"
+start "Air Cleaner Agent" cmd /k "cd /d agents\air_cleaner_agent && python main.py --host localhost --port 12001"
 timeout /t 2 /nobreak >nul
 
 REM 启动数据挖掘代理
 echo [3/4] 启动数据挖掘代理 (端口 12003)...
 echo [3/4] Starting Data Mining Agent (Port 12003)...
-start "Data Mining Agent" cmd /k "cd /d agents\dw_agent && python server.py --host localhost --port 12003"
+start "Data Mining Agent" cmd /k "cd /d agents\dw_agent && python main.py --host localhost --port 12003"
 timeout /t 2 /nobreak >nul
 
 REM 启动总管理代理
 echo [4/4] 启动总管理代理 (端口 12002)...
 echo [4/4] Starting Conductor Agent (Port 12002)...
-start "Conductor Agent" cmd /k "cd /d agents\conductor_agent && python server.py --host localhost --port 12002"
+start "Conductor Agent" cmd /k "cd /d agents\conductor_agent && python main.py --host localhost --port 12002"
 timeout /t 2 /nobreak >nul
 
 echo.
@@ -74,6 +87,29 @@ echo   空调代理 / Air Conditioner:      http://localhost:12000
 echo   空气净化器代理 / Air Cleaner:     http://localhost:12001
 echo   数据挖掘代理 / Data Mining:       http://localhost:12003
 echo.
-echo 按任意键关闭此窗口...
-echo Press any key to close this window...
+echo ========================================
+echo.
+echo 提示：关闭此窗口将自动停止所有服务
+echo Note: Closing this window will stop all services
+echo.
+echo 按任意键停止所有服务并退出...
+echo Press any key to stop all services and exit...
 pause >nul
+
+echo.
+echo 正在停止所有代理服务...
+echo Stopping all agent services...
+echo.
+
+REM 停止所有监听指定端口的进程
+for %%p in (12000 12001 12002 12003) do (
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%%p " ^| findstr "LISTENING" 2^>nul') do (
+        echo 停止端口 %%p 的进程 (PID: %%a)
+        taskkill /PID %%a /F >nul 2>&1
+    )
+)
+
+echo.
+echo 所有服务已停止
+echo All services stopped
+timeout /t 2 /nobreak >nul
