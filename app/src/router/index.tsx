@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, redirect } from "react-router-dom";
 import App from "@/App";
 import Setting from "@/pages/Setting";
 import Chat from "@/pages/Chat";
@@ -10,6 +10,10 @@ export const routes = createBrowserRouter([
     element: <App />,
     children: [
       {
+        index: true,
+        loader: () => redirect("/chat"),
+      },
+      {
         path: "chat",
         element: <Chat />,
       },
@@ -20,10 +24,6 @@ export const routes = createBrowserRouter([
       {
         path: "setting",
         element: <Setting />,
-      },
-      {
-        path: "",
-        element: <Chat />, // 默认显示聊天页面
       },
     ],
   },
