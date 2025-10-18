@@ -3,10 +3,15 @@ import App from "@/App";
 import Setting from "@/pages/Setting";
 import Chat from "@/pages/Chat";
 import About from "@/pages/About";
+import Welcome from "@/pages/Welcome";
 
 export const routes = createBrowserRouter([
   {
     path: "/",
+    element: <Welcome />,
+  },
+  {
+    path: "/home",
     element: <App />,
     children: [
       {
