@@ -20,7 +20,7 @@ const Welcome: React.FC = () => {
     const navigate = useNavigate();
 
     const handleStartChat = () => {
-        navigate('/home/chat');
+        navigate('/chat');
     };
 
     return (

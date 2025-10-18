@@ -8,15 +8,15 @@ import Welcome from "@/pages/Welcome";
 export const routes = createBrowserRouter([
   {
     path: "/",
-    element: <Welcome />,
-  },
-  {
-    path: "/home",
     element: <App />,
     children: [
       {
         index: true,
-        loader: () => redirect("/chat"),
+        loader: () => redirect("/welcome"),
+      },
+      {
+        path: "welcome",
+        element: <Welcome />,
       },
       {
         path: "chat",
