@@ -11,7 +11,7 @@ export default defineConfig(async () => ({
     alias: {
       "@": "/src",
       "@component": "/src/components",
-
+      "@pages": "/src/pages",
     },
   },
   clearScreen: false,
