@@ -1,13 +1,8 @@
 import {
   Button,
-  Cascader,
-  DatePicker,
   Form,
   Input,
-  InputNumber,
-  Mentions,
   Select,
-  TreeSelect,
 } from "antd";
 import React from "react";
 import "./style/setting.sass";
@@ -61,8 +56,12 @@ const Setting: React.FC = () => {
             placeholder="请选择设备所属区域"
             options={[
               { value: "cn", label: "中国" },
-              { value: "en", label: "美国" },
-              { value: "jp", label: "日本" },
+              { value: "de", label: "欧洲" },
+              { value: "us", label: "美国" },
+              { value: "ru", label: "俄罗斯" },
+              { value: "tw", label: "台湾" },
+              { value: "sg", label: "新加坡" },
+              { value: "i2", label: "备用区域" },
             ]}
             style={{ width: "100%" }}
           />
