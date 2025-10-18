@@ -465,18 +465,6 @@ def print_entry(key: str, value: str, tab: int) -> None:
         print_tabbed(f'{Fore.YELLOW}{key + ":": <10}{Style.RESET_ALL}{value}', tab)
 
 
-def print_banner() -> None:
-    print_if_interactive(Fore.YELLOW + Style.BRIGHT + r"""
-                               Xiaomi Cloud
-___ ____ _  _ ____ _  _ ____    ____ _  _ ___ ____ ____ ____ ___ ____ ____ 
- |  |  | |_/  |___ |\ | [__     |___  \/   |  |__/ |__| |     |  |  | |__/ 
- |  |__| | \_ |___ | \| ___]    |___ _/\_  |  |  \ |  | |___  |  |__| |  \ 
-""" + Style.NORMAL +
-"""                                                        by Piotr Machowski 
-
-    """)
-
-
 def start_image_server(image: bytes) -> None:
     class ImgHttpHandler(BaseHTTPRequestHandler):
 
@@ -498,7 +486,6 @@ def start_image_server(image: bytes) -> None:
 
 
 def main() -> None:
-    print_banner()
     servers_str = ", ".join(SERVERS)
     if args.username:
         username = args.username
