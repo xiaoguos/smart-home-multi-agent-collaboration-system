@@ -13,12 +13,12 @@ const sideBarMenus: MenuProps['items'] = [
     label: '对话',
   },
   {
-    key: 'about',
-    label: '关于',
-  },
-  {
     key: 'setting',
     label: '设置',
+  },
+  {
+    key: 'about',
+    label: '关于',
   },
 ]
 
