@@ -1,5 +1,5 @@
 {
-  "name": "moss_ai",
+  "name": "@moss-ai/desktop",
   "private": true,
   "version": "0.1.0",
   "type": "module",
