@@ -1,0 +1,58 @@
+[31merror[0m: expected '=>' in lambda expression, found ''
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:16:9:
+   [36m| [0m
+[36m16[0m [36m| [0m        "message" => "欢迎使用仓颉编程语言";[0m
+   [36m| [0m        [31m^^^^^^^^^ expected '=>' here[0m
+   [36m| [0m
+
+[31merror[0m: expected ';' or '<NL>', found '=>'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:16:19:
+   [36m| [0m
+[36m16[0m [36m| [0m        "message" => "欢迎使用仓颉编程语言";[0m
+   [36m| [0m                  [31m^^ expected ';' or '<NL>' here[0m
+   [36m| [0m
+
+[31merror[0m: expected ';' or '<NL>', found '=>'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:17:19:
+   [36m| [0m
+[36m17[0m [36m| [0m        "version" => "1.0.0";[0m
+   [36m| [0m                  [31m^^ expected ';' or '<NL>' here[0m
+   [36m| [0m
+
+[31merror[0m: expected expression or declaration, found '}'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:18:5:
+   [36m| [0m
+[36m18[0m [36m| [0m    }[0m
+   [36m| [0m    [31m^ expected expression or declaration here[0m
+   [36m| [0m
+
+[31merror[0m: expected '=>' in lambda expression, found ''
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:24:9:
+   [36m| [0m
+[36m24[0m [36m| [0m        "id": 123,[0m
+   [36m| [0m        [31m^^^^ expected '=>' here[0m
+   [36m| [0m
+
+[31merror[0m: expected operator or end of expression, found ':'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:24:13:
+   [36m| [0m
+[36m24[0m [36m| [0m        "id": 123,[0m
+   [36m| [0m            [31m^ expected operator or end of expression[0m
+   [36m| [0m
+
+[31merror[0m: expected operator or end of expression, found ':'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:25:15:
+   [36m| [0m
+[36m25[0m [36m| [0m        "name": "张三",[0m
+   [36m| [0m              [31m^ expected operator or end of expression[0m
+   [36m| [0m
+
+[31merror[0m: expected operator or end of expression, found ':'
+  [36m==>[0m D:\Project\moss-ai\app\backend\pkg\core\application.cj:26:16:
+   [36m| [0m
+[36m26[0m [36m| [0m        "email": "zhangsan@example.com"[0m
+   [36m| [0m               [31m^ expected operator or end of expression[0m
+   [36m| [0m
+
+14 errors generated, 8 errors printed.
+Error: failed to compile package `core`, return code is 1

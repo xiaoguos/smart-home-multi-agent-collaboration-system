@@ -1,10 +1,10 @@
 [package]
 cjc-version = "1.0.0"
-name = "core"
+name = "mossAi"
 description = "nothing here"
 version = "1.0.0"
 target-dir = "dist"
-src-dir = "pkg/core"
+src-dir = "src"
 output-type = "executable"
 compile-option = ""
 override-compile-option = ""
@@ -13,7 +13,19 @@ package-configuration = {  }
 
 [dependencies]
 
-
-[target.x86_64-w64-mingw32]
+[target]
+  [target.aarch64-linux-ohos]
+    compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_aarch64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\""
+    [target.aarch64-linux-ohos.bin-dependencies]
+      path-option = [ "${AARCH64_LIBS}", "${AARCH64_MACRO_LIBS}", "${AARCH64_KIT_LIBS}" ]
+      [target.aarch64-linux-ohos.bin-dependencies.package-option]
+  [target.x86_64-linux-ohos]
+    compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/x86_64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/build/linux_ohos_x86_64_llvm/openssl\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\""
+    [target.x86_64-linux-ohos.bin-dependencies]
+      path-option = [ "${X86_64_OHOS_LIBS}", "${X86_64_OHOS_MACRO_LIBS}", "${X86_64_OHOS_KIT_LIBS}" ]
+  [target.x86_64-unknown-windows-gnu]
+    [target.x86_64-unknown-windows-gnu.bin-dependencies]
+      path-option = [ "${X86_64_LIBS}", "${X86_64_MACRO_LIBS}" ]
+      [target.x86_64-unknown-windows-gnu.bin-dependencies.package-option]
   [target.x86_64-w64-mingw32.bin-dependencies]
     path-option = ["D:\\Project\\cangjie_stdx\\dynamic\\stdx"]

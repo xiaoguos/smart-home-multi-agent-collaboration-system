@@ -2,9 +2,9 @@
   "packageInformation": {
     "core": {
       "rootPackageName": "core",
-      "fileNameHash": "8741048060791297586",
-      "timeStamp": 1759586410,
-      "isBuilt": true,
+      "fileNameHash": "2628358382895818914",
+      "timeStamp": 1760849588,
+      "isBuilt": false,
       "exeName": "main",
       "hasSubPkgs": false
     }

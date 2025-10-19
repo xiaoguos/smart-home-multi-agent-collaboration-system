@@ -1,0 +1,22 @@
+{
+  "packageInformation": {
+    "mossAi": {
+      "rootPackageName": "mossAi",
+      "fileNameHash": "-4482054392302262713",
+      "timeStamp": 1760889912,
+      "isBuilt": true,
+      "exeName": "main",
+      "hasSubPkgs": true
+    },
+    "mossAi.api": {
+      "rootPackageName": "mossAi",
+      "fileNameHash": "8876571444402261468",
+      "timeStamp": 1760890220,
+      "isBuilt": true,
+      "exeName": "",
+      "hasSubPkgs": false
+    }
+  },
+  "jsonHash": "-1578242761810910060",
+  "rootPackageName": "mossAi"
+}
