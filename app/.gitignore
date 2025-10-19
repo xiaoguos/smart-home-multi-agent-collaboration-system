@@ -11,8 +11,12 @@ node_modules
 */dist
 dist-ssr
 *.local
-*.cache/**
 
+# Cache and Arts directories
+.cache/
+.arts/
+**/.cache/
+**/.arts/
 
 # Editor directories and files
 .vscode/*
@@ -24,6 +28,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-**/.arts/**
-**/.cache/**
 **/dist/**
