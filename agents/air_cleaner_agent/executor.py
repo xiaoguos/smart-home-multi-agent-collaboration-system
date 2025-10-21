@@ -17,18 +17,18 @@ from a2a.utils import (
 )
 from a2a.utils.errors import ServerError
 
-from agent import AirConditionerAgent
+from agent import AirPurifierAgent
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class AirConditionerAgentExecutor(AgentExecutor):
-    """Air Conditioner AgentExecutor."""
+class AirPurifierAgentExecutor(AgentExecutor):
+    """Air Purifier AgentExecutor."""
 
     def __init__(self):
-        self.agent = AirConditionerAgent()
+        self.agent = AirPurifierAgent()
 
     async def execute(
         self,
@@ -73,7 +73,7 @@ class AirConditionerAgentExecutor(AgentExecutor):
                 else:
                     await updater.add_artifact(
                         [Part(root=TextPart(text=item['content']))],
-                        name='ac_status_result',
+                        name='purifier_status_result',
                     )
                     await updater.complete()
                     break

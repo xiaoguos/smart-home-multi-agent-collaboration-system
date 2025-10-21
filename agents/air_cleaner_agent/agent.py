@@ -8,7 +8,13 @@ from pydantic import BaseModel
 
 import logging
 
-from tools import get_ac_status,set_ac_power,set_ac_temperature
+from tools import (
+    get_purifier_status,
+    set_purifier_power,
+    set_purifier_fan_level,
+    set_purifier_mode,
+    set_purifier_led
+)
 
 memory = MemorySaver()
 
@@ -17,26 +23,41 @@ logger = logging.getLogger(__name__)
 class ResponseFormat(BaseModel):
     message: str
 
-class AirConditionerAgent:
+class AirPurifierAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
     SYSTEM_PROMPT = (
-        '你是一个专门的家庭空调控制助手。'
-        '你的唯一目的是帮助用户控制他们的家庭空调系统。'
-        '你可以帮助调节温度、设置模式（制冷、制热、送风等）、'
-        '打开或关闭空调，以及提供节能建议。'
-        '如果用户询问与空调控制或相关主题无关的内容，'
-        '请礼貌地说明你无法帮助处理该主题，只能协助处理与空调相关的问题。'
+        '你是一个专门的桌面空气净化器控制助手（型号：zhimi-oa1）。'
+        '你的唯一目的是帮助用户控制他们的桌面空气净化器。'
+        '你可以帮助：开关净化器、查看空气质量（PM2.5、湿度）、调节风扇等级、'
+        '设置工作模式（自动/睡眠/喜爱）、调整LED亮度、查看滤芯寿命等。'
+        '如果用户询问与空气净化器控制或空气质量无关的内容，'
+        '请礼貌地说明你无法帮助处理该主题，只能协助处理与空气净化器相关的问题。'
         '不要尝试回答无关问题或将工具用于其他目的。'
-        '当用户请求查询设备状态时，一定要调用工具 get_ac_status 获取最新状态，并将结果直接返回给用户；如工具返回 JSON，请原样返回或提取关键字段用中文概述。'
-        '当用户请求"启动/打开/关闭空调"等同义表达时，必须调用 set_ac_power(power: bool) 工具执行，并向用户反馈执行结果。'
-        '当用户请求设置温度（如"调到26度/设置到23℃"）时，必须调用 set_ac_temperature(temperature: int) 工具执行；如用户未给出明确温度，先向用户确认目标温度（范围16-30℃）。'
-        '当用户以语义描述温感（如"有点热/太热/冷一点/暖一点/舒服点/睡觉用"）而未给出具体温度时，按以下规则自动设置人类适宜温度：'
-        '1) 先调用 get_ac_status 获取当前 power、mode、tar_temp；若电源关闭且需要调温，先调用 set_ac_power(true)。'
-        '2) 若 mode 为 制冷/自动 且用户表达"有点热/太热/降温/冷一点"，将目标温度在当前基础上降低1-2℃（默认2℃），不低于24℃；若表达"有点冷/太冷/升温/暖一点"，则提高1-2℃（默认2℃），不高于30℃，然后调用 set_ac_temperature。'
-        '3) 若 mode 为 制热 且用户表达"有点冷/太冷/升温/暖一点"，在当前基础上提高1-2℃（默认2℃），不高于26℃；若表达"有点热/太热/降温/冷一点"，则降低1-2℃（默认2℃），不低于16℃，然后调用 set_ac_temperature。'
-        '4) 若用户表达"舒适/舒服点"，则：制冷模式设为26℃，制热模式设为22℃；若无法判断模式，则先查询状态后按模式执行。'
-        '5) 若用户表达"睡觉/睡眠"，则：制冷模式设为27℃，制热模式设为21℃。'
-        '所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。'
+        ''
+        '工具使用指南：'
+        '1. 查询状态：当用户请求查询设备状态、空气质量、PM2.5、湿度、滤芯等信息时，'
+        '   调用 get_purifier_status 获取最新状态，并用中文友好地展示关键信息。'
+        '   重点关注：电源状态、PM2.5值、湿度、风扇等级、工作模式、滤芯剩余寿命。'
+        ''
+        '2. 电源控制：当用户说"打开/开启/启动净化器"时，调用 set_purifier_power(power=True)；'
+        '   说"关闭/关掉净化器"时，调用 set_purifier_power(power=False)。'
+        ''
+        '3. 风扇等级：当用户说"低速/一档/最小风"时设为1，"中速/二档/中等风"时设为2，'
+        '   "高速/三档/最大风/强力"时设为3，使用 set_purifier_fan_level(level=1/2/3)。'
+        ''
+        '4. 工作模式：当用户说"自动模式/智能模式"时设为0，"睡眠模式/静音模式"时设为1，'
+        '   "喜爱模式/收藏模式"时设为2，使用 set_purifier_mode(mode=0/1/2)。'
+        ''
+        '5. LED控制：当用户说"关闭LED/关灯"时设为0，"LED调暗/暗一点"时设为1，'
+        '   "LED调亮/亮一点"时设为2，使用 set_purifier_led(brightness=0/1/2)。'
+        ''
+        '6. 智能场景建议：'
+        '   - 空气质量差（PM2.5>75）：建议开启并设为自动模式或高速档'
+        '   - 睡眠时段：建议设为睡眠模式+关闭LED'
+        '   - 滤芯寿命<10%：提醒用户更换滤芯'
+        '   - 空气质量好（PM2.5<35）：可建议降低风扇等级或关闭以节能'
+        ''
+        '始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。'
     )
 
     FORMAT_INSTRUCTION = (
@@ -51,7 +72,13 @@ class AirConditionerAgent:
                 openai_api_base='https://api.deepseek.com',
                 temperature=0,
             )
-        self.tools = [get_ac_status,set_ac_power,set_ac_temperature]
+        self.tools = [
+            get_purifier_status,
+            set_purifier_power,
+            set_purifier_fan_level,
+            set_purifier_mode,
+            set_purifier_led
+        ]
 
         self.graph = create_react_agent(
             self.model,
@@ -72,12 +99,16 @@ class AirConditionerAgent:
                 and len(message.tool_calls) > 0
             ):
                 tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in message.tool_calls]
-                if any(name == 'set_ac_power' for name in tool_names):
-                    tip = '正在切换空调电源…'
-                elif any(name == 'get_ac_status' for name in tool_names):
-                    tip = '正在查询空调设备状态…'
-                elif any(name == 'set_ac_temperature' for name in tool_names):
-                    tip = '正在设置空调温度…'
+                if any(name == 'set_purifier_power' for name in tool_names):
+                    tip = '正在切换空气净化器电源…'
+                elif any(name == 'get_purifier_status' for name in tool_names):
+                    tip = '正在查询空气净化器状态…'
+                elif any(name == 'set_purifier_fan_level' for name in tool_names):
+                    tip = '正在设置风扇等级…'
+                elif any(name == 'set_purifier_mode' for name in tool_names):
+                    tip = '正在设置工作模式…'
+                elif any(name == 'set_purifier_led' for name in tool_names):
+                    tip = '正在设置LED亮度…'
                 else:
                     tip = '正在处理您的请求…'
                 yield {

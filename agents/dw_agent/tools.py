@@ -6,13 +6,14 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 import logging
+import os
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 数据库文件路径
-DB_PATH = "user_behavior.db"
+# 数据库文件路径 - 使用绝对路径，放在当前模块目录下
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_behavior.db")
 
 def init_database():
     """初始化数据库表结构"""

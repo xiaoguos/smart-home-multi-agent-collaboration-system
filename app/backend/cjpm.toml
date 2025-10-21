@@ -12,6 +12,7 @@ link-option = ""
 package-configuration = {  }
 
 [dependencies]
+mysql = {git = "https://gitcode.com/Cangjie-SIG/mysql-driver.git", branch="master"}
 
 [target]
   [target.aarch64-linux-ohos]

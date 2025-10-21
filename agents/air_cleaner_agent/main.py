@@ -22,10 +22,10 @@ from a2a.server.tasks import (
     InMemoryPushNotificationConfigStore,
     InMemoryTaskStore,
 )
-from executor import AirConditionerAgentExecutor
+from executor import AirPurifierAgentExecutor
 
 memory = MemorySaver()
-from agent import AirConditionerAgent
+from agent import AirPurifierAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,37 +37,42 @@ class ResponseFormat(BaseModel):
 
 @click.command()
 @click.option("--host", "host", default="localhost")
-@click.option("--port", "port", default=12000)
+@click.option("--port", "port", default=12002)
 def main(host, port):
-    """Starts the Currency Agent server."""
+    """Starts the Air Purifier Agent server."""
     try:
         capabilities = AgentCapabilities(
-            type="air_conditioner",
-            supported_commands=["开启", "关闭", "查询状态"],
+            type="air_purifier",
+            supported_commands=["开启", "关闭", "查询状态", "设置风扇", "设置模式", "调节LED"],
             properties={
-                "current_temperature": 25,
-                "target_temperature": 26,
+                "pm25": 0,
+                "humidity": 0,
+                "fan_level": 1,
+                "mode": 0,
                 "power_state": "off",
+                "filter_life": 100,
             },
         )
         skill = AgentSkill(
-            id="control_air_conditioner",
-            name="Air Conditioner Control",
-            description="控制家庭空调系统，包括温度，模式和电源设置",
-            tags=["air conditioning", "climate control", "home automation"],
+            id="control_air_purifier",
+            name="Air Purifier Control",
+            description="控制桌面空气净化器（zhimi-oa1），包括电源、风扇等级、工作模式、LED亮度，查询PM2.5、湿度、滤芯寿命等",
+            tags=["air purifier", "air quality", "PM2.5", "home automation", "smart home"],
             examples=[
-                "Set AC to 22 degrees",
-                "Turn on the air conditioner",
-                "Change AC mode to cooling",
+                "打开空气净化器",
+                "查询当前PM2.5",
+                "设置为睡眠模式",
+                "把风扇调到高速",
+                "关闭LED灯",
             ],
         )
         agent_card = AgentCard(
-            name="Air Conditioner Agent",
-            description="家用空调系统控制的专业助手",
+            name="Air Purifier Agent",
+            description="桌面空气净化器（zhimi-oa1）控制的专业助手",
             url=f"http://{host}:{port}/",
             version="1.0.0",
-            default_input_modes=AirConditionerAgent.SUPPORTED_CONTENT_TYPES,
-            default_output_modes=AirConditionerAgent.SUPPORTED_CONTENT_TYPES,
+            default_input_modes=AirPurifierAgent.SUPPORTED_CONTENT_TYPES,
+            default_output_modes=AirPurifierAgent.SUPPORTED_CONTENT_TYPES,
             capabilities=capabilities,
             skills=[skill],
         )
@@ -79,7 +84,7 @@ def main(host, port):
             httpx_client=httpx_client, config_store=push_config_store
         )
         request_handler = DefaultRequestHandler(
-            agent_executor=AirConditionerAgentExecutor(),
+            agent_executor=AirPurifierAgentExecutor(),
             task_store=InMemoryTaskStore(),
             push_config_store=push_config_store,
             push_sender=push_sender,

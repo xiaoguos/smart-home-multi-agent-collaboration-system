@@ -4,7 +4,7 @@ import json
 from pydantic import BaseModel, Field
 
 
-device = AirConditioningCompanionMcn02(ip="192.168.110.126", token="1724bf8d57b355173dfa08ae23367f86")
+device = AirConditioningCompanionMcn02(ip="192.168.110.127", token="1724bf8d57b355173dfa08ae23367f86")
 
 
 @tool("get_ac_status", description="获取空调当前状态")
@@ -54,7 +54,6 @@ def set_ac_power(power: bool):
         return json.dumps(error_status, indent=2)
 
 
-# 新增：设置目标温度
 class TemperatureArgs(BaseModel):
     temperature: int = Field(..., ge=16, le=30, description="目标温度（摄氏度），范围 16-30")
 

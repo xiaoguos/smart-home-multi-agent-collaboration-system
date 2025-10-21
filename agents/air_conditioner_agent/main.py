@@ -37,7 +37,7 @@ class ResponseFormat(BaseModel):
 
 @click.command()
 @click.option("--host", "host", default="localhost")
-@click.option("--port", "port", default=12000)
+@click.option("--port", "port", default=12001)
 def main(host, port):
     """Starts the Currency Agent server."""
     try:

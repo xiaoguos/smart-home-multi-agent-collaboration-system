@@ -37,7 +37,7 @@ class ResponseFormat(BaseModel):
 
 @click.command()
 @click.option("--host", "host", default="localhost")
-@click.option("--port", "port", default=12002)
+@click.option("--port", "port", default=12000)
 def main(host, port):
     """Starts the Conductor Agent server."""
     try:
