@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class DataMiningAgentExecutor(AgentExecutor):
-    """Data Mining AgentExecutor - 数据挖掘代理执行器."""
+    """Data Mining AgentExecutor."""
 
     def __init__(self):
         self.agent = DataMiningAgent()
@@ -79,7 +79,7 @@ class DataMiningAgentExecutor(AgentExecutor):
                     break
             else:
                 # 如果没有内容，可以添加默认响应
-                default_response = "数据挖掘分析系统已接收您的请求，正在处理中..."
+                default_response = "数据挖掘请求已接收，正在处理中..."
                 await updater.update_status(
                     TaskState.working,
                     new_agent_text_message(

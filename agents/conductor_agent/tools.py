@@ -29,6 +29,7 @@ DB_PATH = "user_behavior.db"
 # - air_conditioner_agent: 12001
 # - air_cleaner_agent: 12002
 # - data_mining_agent: 12003
+# - bedside_lamp_agent: 12004
 REGISTERED_AGENTS = {
     "air_conditioner": {
         "name": "空调代理",
@@ -47,6 +48,18 @@ REGISTERED_AGENTS = {
         "url": "http://localhost:12003",
         "description": "分析用户行为数据",
         "capabilities": ["习惯分析", "偏好预测", "历史查询", "统计分析"]
+    },
+    "bedside_lamp": {
+        "name": "床头灯代理",
+        "url": "http://localhost:12004",
+        "description": "控制Yeelink床头灯设备",
+        "capabilities": ["电源控制", "亮度调节", "色温设置", "颜色设置", "场景模式", "阅读模式", "睡眠模式", "浪漫模式", "夜灯模式"]
+    },
+    "data_mining": {
+        "name": "数据挖掘代理",
+        "url": "http://localhost:12003",
+        "description": "分析用户行为和设备使用习惯，提供智能建议",
+        "capabilities": ["场景识别", "习惯分析", "偏好挖掘", "行为预测", "智能建议", "RAG数据挖掘"]
     }
 }
 
@@ -268,7 +281,7 @@ def get_agent_status():
 
 
 class DeviceControlArgs(BaseModel):
-    device_type: str = Field(..., description="设备类型 (air_conditioner, air_cleaner)")
+    device_type: str = Field(..., description="设备类型 (air_conditioner, air_cleaner, bedside_lamp)")
     action: str = Field(..., description="要执行的操作")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="操作参数")
 
@@ -300,49 +313,50 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         # 调用 A2A agent 执行实际控制 (现在是同步函数，会在线程中运行)
         result = call_a2a_agent(agent_url, command)
         
-        # 记录操作日志到数据库
-        success = result.get("success", False)
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            
-            # 确保表存在
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS device_operations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    device_type TEXT NOT NULL,
-                    device_name TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    parameters TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    success BOOLEAN DEFAULT TRUE,
-                    response TEXT
-                )
-            ''')
-            
-            # 插入操作记录
-            cursor.execute('''
-                INSERT INTO device_operations 
-                (user_id, device_type, device_name, action, parameters, success, response)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                "default_user",  # 默认用户ID，实际应用中应该从上下文获取
-                device_type,
-                agent_config["name"],
-                action,
-                json.dumps(parameters) if parameters else None,
-                success,
-                json.dumps(result)
-            ))
-            
-            conn.commit()
-            conn.close()
-            logger.info("设备操作已记录到数据库")
-            
-        except Exception as log_error:
-            logger.warning(f"日志记录失败: {log_error}")
+        # 暂时不记录操作日志到数据库
+        # success = result.get("success", False)
+        # try:
+        #     conn = sqlite3.connect(DB_PATH)
+        #     cursor = conn.cursor()
+        #     
+        #     # 确保表存在
+        #     cursor.execute('''
+        #         CREATE TABLE IF NOT EXISTS device_operations (
+        #             id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #             user_id TEXT NOT NULL,
+        #             device_type TEXT NOT NULL,
+        #             device_name TEXT NOT NULL,
+        #             action TEXT NOT NULL,
+        #             parameters TEXT,
+        #             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        #             success BOOLEAN DEFAULT TRUE,
+        #             response TEXT
+        #         )
+        #     ''')
+        #     
+        #     # 插入操作记录
+        #     cursor.execute('''
+        #         INSERT INTO device_operations 
+        #         (user_id, device_type, device_name, action, parameters, success, response)
+        #         VALUES (?, ?, ?, ?, ?, ?, ?)
+        #     ''', (
+        #         "default_user",  # 默认用户ID，实际应用中应该从上下文获取
+        #         device_type,
+        #         agent_config["name"],
+        #         action,
+        #         json.dumps(parameters) if parameters else None,
+        #         success,
+        #         json.dumps(result)
+        #     ))
+        #     
+        #     conn.commit()
+        #     conn.close()
+        #     logger.info("设备操作已记录到数据库")
+        #     
+        # except Exception as log_error:
+        #     logger.warning(f"日志记录失败: {log_error}")
         
+        success = result.get("success", False)
         if success:
             logger.info(f"成功控制 {agent_config['name']}")
             return json.dumps({
@@ -353,7 +367,6 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                 "parameters": parameters,
                 "command": command,
                 "status": "success",
-                "logged": True,
                 "responses": result.get("responses", [])
             }, indent=2, ensure_ascii=False)
         else:
@@ -366,7 +379,6 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                 "parameters": parameters,
                 "command": command,
                 "status": "failed",
-                "logged": True,
                 "error": result.get("error")
             }, indent=2, ensure_ascii=False)
         
@@ -554,4 +566,73 @@ def get_user_insights(user_id: str = "default_user"):
         return json.dumps({
             "error": str(e),
             "message": "获取用户洞察失败"
+        }, indent=2, ensure_ascii=False)
+
+
+class DataMiningQueryArgs(BaseModel):
+    query: str = Field(..., description="给数据挖掘代理的查询内容，如'我要睡觉了'、'分析我对空调的偏好'等")
+    user_id: str = Field(default="default_user", description="用户ID")
+
+
+@tool("query_data_mining_agent", args_schema=DataMiningQueryArgs, 
+     description="调用数据挖掘代理分析用户场景和习惯。当用户描述场景（如'我睡觉了'）或需要个性化建议时使用此工具")
+def query_data_mining_agent(query: str, user_id: str = "default_user"):
+    """
+    调用数据挖掘代理，进行场景识别和习惯分析
+    
+    适用场景：
+    - 用户描述了一个场景（如"我要睡觉了"、"起床了"、"要出门了"）
+    - 需要获取特定场景下的设备控制建议
+    - 需要分析用户对某个设备的使用偏好
+    
+    Args:
+        query: 用户的查询或场景描述
+        user_id: 用户ID
+        
+    Returns:
+        数据挖掘agent的分析结果，包含场景识别和设备控制建议
+    """
+    try:
+        agent_config = REGISTERED_AGENTS.get("data_mining")
+        if not agent_config:
+            return json.dumps({
+                "error": "数据挖掘代理未配置",
+                "message": "请检查数据挖掘代理是否已启动"
+            }, indent=2, ensure_ascii=False)
+        
+        agent_url = agent_config["url"]
+        
+        # 构建完整的查询
+        full_query = f"{query} (用户ID: {user_id})"
+        
+        logger.info(f"调用数据挖掘代理: query={full_query}")
+        
+        # 调用数据挖掘代理
+        result = call_a2a_agent(agent_url, full_query, timeout=90.0)
+        
+        if result.get("success"):
+            logger.info("数据挖掘代理调用成功")
+            return json.dumps({
+                "message": "数据挖掘分析完成",
+                "query": query,
+                "user_id": user_id,
+                "status": "success",
+                "responses": result.get("responses", [])
+            }, indent=2, ensure_ascii=False)
+        else:
+            logger.error(f"数据挖掘代理调用失败: {result.get('error')}")
+            return json.dumps({
+                "message": "数据挖掘分析失败",
+                "query": query,
+                "user_id": user_id,
+                "status": "failed",
+                "error": result.get("error"),
+                "suggestion": "可能是数据挖掘代理未启动或网络问题"
+            }, indent=2, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error(f"调用数据挖掘代理异常: {str(e)}", exc_info=True)
+        return json.dumps({
+            "error": str(e),
+            "message": "调用数据挖掘代理失败"
         }, indent=2, ensure_ascii=False)

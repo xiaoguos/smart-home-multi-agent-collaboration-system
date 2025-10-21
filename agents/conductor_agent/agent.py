@@ -15,7 +15,8 @@ from tools import (
     control_device,
     get_system_overview,
     analyze_user_behavior,
-    get_user_insights
+    get_user_insights,
+    query_data_mining_agent
 )
 
 memory = MemorySaver()
@@ -44,6 +45,7 @@ class ConductorAgent:
         '- 获取系统概览：使用 get_system_overview 工具'
         '- 分析用户行为：使用 analyze_user_behavior 工具'
         '- 获取用户洞察：使用 get_user_insights 工具'
+        '- **场景智能分析**：使用 query_data_mining_agent 工具（重要！）'
         ''
         '设备控制指南：'
         '当用户说"开启空调"、"打开空调"、"关闭空调"等命令时，使用 control_device 工具：'
@@ -58,7 +60,21 @@ class ConductorAgent:
         '当用户询问系统状态时，优先调用 get_system_overview 获取整体概览。'
         '当用户询问可用服务时，使用 list_available_agents 工具。'
         '当用户询问使用习惯或需要个性化建议时，使用 analyze_user_behavior 或 get_user_insights 工具。'
-        '所有设备控制操作都会自动记录到数据库中用于后续分析。'
+        ''
+        '**场景智能分析（核心功能）**：'
+        '当用户描述一个生活场景时（例如："我要睡觉了"、"起床了"、"要出门了"、"到家了"），'
+        '必须优先使用 query_data_mining_agent 工具：'
+        '1. 数据挖掘代理会自动识别用户描述的场景类型'
+        '2. 从StarRocks数据库挖掘该场景下的历史使用习惯'
+        '3. 提供个性化的设备控制建议（如空调温度、床头灯亮度等）'
+        '4. 如果数据挖掘代理返回"暂无足够历史数据"，则可以使用默认设置或提示用户'
+        ''
+        '场景处理流程示例：'
+        '用户说："我要睡觉了" → '
+        '  1. 调用 query_data_mining_agent，传入"我要睡觉了"'
+        '  2. 数据挖掘代理识别为"睡觉"场景'
+        '  3. 返回建议：关闭主灯、打开床头灯(亮度10%)、开启空调(25°C)、净化器睡眠模式'
+        '  4. 根据建议依次调用 control_device 执行设备控制'
         ''
         '始终以中文回复用户，提供清晰、友好的服务。'
         '如果用户的需求超出了你的能力范围，请礼貌地说明并提供相关建议。'
@@ -84,7 +100,8 @@ class ConductorAgent:
             control_device,
             get_system_overview,
             analyze_user_behavior,
-            get_user_insights
+            get_user_insights,
+            query_data_mining_agent
         ]
 
         self.graph = create_react_agent(
@@ -120,6 +137,8 @@ class ConductorAgent:
                     tip = '正在分析用户行为数据…'
                 elif any(name == 'get_user_insights' for name in tool_names):
                     tip = '正在生成用户洞察…'
+                elif any(name == 'query_data_mining_agent' for name in tool_names):
+                    tip = '正在分析场景并挖掘使用习惯…'
                 else:
                     tip = '正在处理您的请求…'
                 yield {
