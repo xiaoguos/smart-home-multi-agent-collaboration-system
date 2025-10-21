@@ -100,32 +100,44 @@ Write-Host ""
 $processes = @()
 
 # 启动空调代理
-Write-ColorText "[1/4] 启动空调代理 (端口 12000)..." "Yellow"
-Write-ColorText "[1/4] Starting Air Conditioner Agent (Port 12000)..." "Yellow"
+Write-ColorText "[1/5] 启动空调代理 (端口 12001)..." "Yellow"
+Write-ColorText "[1/5] Starting Air Conditioner Agent (Port 12001)..." "Yellow"
 $acLogPath = "$PWD\logs\air_conditioner_agent.log"
-$acProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12000" `
+$acProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12001" `
     -WorkingDirectory "$PWD\agents\air_conditioner_agent" `
     -WindowStyle Hidden `
     -PassThru
-$processes += @{Name="空调代理 / Air Conditioner Agent"; Port=12000; Process=$acProcess; LogPath=$acLogPath}
+$processes += @{Name="空调代理 / Air Conditioner Agent"; Port=12001; Process=$acProcess; LogPath=$acLogPath}
 Write-ColorText "  ✓ 已启动 (PID: $($acProcess.Id))" "Green"
 Start-Sleep -Seconds 2
 
 # 启动空气净化器代理
-Write-ColorText "[2/4] 启动空气净化器代理 (端口 12001)..." "Yellow"
-Write-ColorText "[2/4] Starting Air Cleaner Agent (Port 12001)..." "Yellow"
+Write-ColorText "[2/5] 启动空气净化器代理 (端口 12002)..." "Yellow"
+Write-ColorText "[2/5] Starting Air Cleaner Agent (Port 12002)..." "Yellow"
 $cleanerLogPath = "$PWD\logs\air_cleaner_agent.log"
-$cleanerProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12001" `
+$cleanerProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12002" `
     -WorkingDirectory "$PWD\agents\air_cleaner_agent" `
     -WindowStyle Hidden `
     -PassThru
-$processes += @{Name="空气净化器代理 / Air Cleaner Agent"; Port=12001; Process=$cleanerProcess; LogPath=$cleanerLogPath}
+$processes += @{Name="空气净化器代理 / Air Cleaner Agent"; Port=12002; Process=$cleanerProcess; LogPath=$cleanerLogPath}
 Write-ColorText "  ✓ 已启动 (PID: $($cleanerProcess.Id))" "Green"
 Start-Sleep -Seconds 2
 
+# 启动床头灯代理
+Write-ColorText "[3/5] 启动床头灯代理 (端口 12004)..." "Yellow"
+Write-ColorText "[3/5] Starting Bedside Lamp Agent (Port 12004)..." "Yellow"
+$lampLogPath = "$PWD\logs\bedside_lamp_agent.log"
+$lampProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12004" `
+    -WorkingDirectory "$PWD\agents\bedside_lamp_agent" `
+    -WindowStyle Hidden `
+    -PassThru
+$processes += @{Name="床头灯代理 / Bedside Lamp Agent"; Port=12004; Process=$lampProcess; LogPath=$lampLogPath}
+Write-ColorText "  ✓ 已启动 (PID: $($lampProcess.Id))" "Green"
+Start-Sleep -Seconds 2
+
 # 启动数据挖掘代理
-Write-ColorText "[3/4] 启动数据挖掘代理 (端口 12003)..." "Yellow"
-Write-ColorText "[3/4] Starting Data Mining Agent (Port 12003)..." "Yellow"
+Write-ColorText "[4/5] 启动数据挖掘代理 (端口 12003)..." "Yellow"
+Write-ColorText "[4/5] Starting Data Mining Agent (Port 12003)..." "Yellow"
 $dwLogPath = "$PWD\logs\dw_agent.log"
 $dwProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12003" `
     -WorkingDirectory "$PWD\agents\dw_agent" `
@@ -136,14 +148,14 @@ Write-ColorText "  ✓ 已启动 (PID: $($dwProcess.Id))" "Green"
 Start-Sleep -Seconds 2
 
 # 启动总管理代理
-Write-ColorText "[4/4] 启动总管理代理 (端口 12002)..." "Yellow"
-Write-ColorText "[4/4] Starting Conductor Agent (Port 12002)..." "Yellow"
+Write-ColorText "[5/5] 启动总管理代理 (端口 12000)..." "Yellow"
+Write-ColorText "[5/5] Starting Conductor Agent (Port 12000)..." "Yellow"
 $conductorLogPath = "$PWD\logs\conductor_agent.log"
-$conductorProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12002" `
+$conductorProcess = Start-Process python -ArgumentList "main.py", "--host", "localhost", "--port", "12000" `
     -WorkingDirectory "$PWD\agents\conductor_agent" `
     -WindowStyle Hidden `
     -PassThru
-$processes += @{Name="总管理代理 / Conductor Agent"; Port=12002; Process=$conductorProcess; LogPath=$conductorLogPath}
+$processes += @{Name="总管理代理 / Conductor Agent"; Port=12000; Process=$conductorProcess; LogPath=$conductorLogPath}
 Write-ColorText "  ✓ 已启动 (PID: $($conductorProcess.Id))" "Green"
 Start-Sleep -Seconds 2
 
