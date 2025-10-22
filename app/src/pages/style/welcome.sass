@@ -283,3 +283,313 @@
 
   .advantage-desc
     font-size: 0.75rem
+
+// 登录模式样式
+.welcome-content.login-mode
+  .main-content
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1)
+
+    
+    &.moved-left
+      display: flex !important;
+      flex-direction: column;
+      align-items: center ;
+      
+      .welcome-space
+        align-items: center;
+        
+      .welcome-title
+        font-size: 2.2rem
+        
+      .welcome-description
+        font-size: 1rem
+        text-align: left
+        
+      .welcome-features
+        justify-content: flex-start
+        
+      .start-button
+        align-self: flex-start
+
+// 登录框样式
+.login-content
+  height: 100%
+  display: flex
+  align-items: center
+  justify-content: center
+  animation: slideInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1)
+
+.login-card
+  background: rgba(255, 255, 255, 0.1)
+  backdrop-filter: blur(10px)
+  border-radius: 20px
+  border: 1px solid rgba(255, 255, 255, 0.2)
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1)
+  width: 100%
+  max-width: 400px
+  padding: 30px
+
+.login-header
+  text-align: center
+  margin-bottom: 30px
+  
+  .login-icon
+    font-size: 48px
+    color: #1890ff
+    margin-bottom: 15px
+    display: block
+    
+  .login-title
+    color: #ffffff
+    font-weight: 600
+    margin: 0
+    font-size: 1.8rem
+
+.login-form
+  .ant-form-item-label > label
+    color: rgba(255, 255, 255, 0.9)
+    font-weight: 500
+    
+  .ant-input, .ant-input-password
+    background: rgba(255, 255, 255, 0.1)
+    border: 1px solid rgba(255, 255, 255, 0.2)
+    border-radius: 8px
+    color: #ffffff
+    
+    &::placeholder
+      color: rgba(255, 255, 255, 0.6)
+      
+    &:focus, &:hover
+      background: rgba(255, 255, 255, 0.15)
+      border-color: #1890ff
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2)
+      
+  .ant-input-prefix
+    color: rgba(255, 255, 255, 0.6)
+    
+  .ant-input-password-icon
+    color: rgba(255, 255, 255, 0.6)
+    
+    &:hover
+      color: rgba(255, 255, 255, 0.8)
+
+.login-button
+  height: 50px
+  font-size: 1.1rem
+  font-weight: 600
+  border-radius: 8px
+  background: linear-gradient(135deg, #1890ff, #722ed1)
+  border: none
+  box-shadow: 0 8px 20px rgba(24, 144, 255, 0.3)
+  transition: all 0.3s ease
+  
+  &:hover
+    box-shadow: 0 12px 25px rgba(24, 144, 255, 0.4)
+    background: linear-gradient(135deg, #40a9ff, #9254de)
+
+// 动画定义
+@keyframes slideInRight
+  0%
+    opacity: 0
+    transform: translateX(50px)
+  100%
+    opacity: 1
+    transform: translateX(0)
+
+@keyframes slideOutLeft
+  0%
+    opacity: 1
+    transform: translateX(0)
+  100%
+    opacity: 0
+    transform: translateX(-50px)
+
+@keyframes slideOutRight
+  0%
+    opacity: 1
+    transform: translateX(0)
+  100%
+    opacity: 0
+    transform: translateX(50px)
+
+// 左右内容淡出动画
+.left-content, .right-content
+  transition: all 0.4s ease
+  
+  &.fade-out
+    opacity: 0
+    transform: scale(0.9)
+
+// 响应式调整
+@media (max-width: 992px)
+  .welcome-content.login-mode
+    .main-content.moved-left
+      transform: none
+      text-align: center
+      
+      .welcome-space
+        align-items: center
+        
+      .welcome-description
+        text-align: center
+        
+      .welcome-features
+        justify-content: center
+        
+      .start-button
+        align-self: center
+
+@media (max-width: 768px)
+  .login-card
+    padding: 20px
+    margin: 20px
+    
+  .login-header
+    .login-icon
+      font-size: 36px
+      
+    .login-title
+      font-size: 1.5rem
+
+// 微信登录样式
+.login-tabs
+  .ant-tabs-nav
+    margin-bottom: 20px
+    
+  .ant-tabs-tab
+    color: rgba(255, 255, 255, 0.7)
+    font-weight: 500
+    
+    &:hover
+      color: rgba(255, 255, 255, 0.9)
+      
+    &.ant-tabs-tab-active
+      color: #1890ff
+      
+      .ant-tabs-tab-btn
+        color: #1890ff
+        
+  .ant-tabs-ink-bar
+    background: #1890ff
+    
+  .ant-tabs-content-holder
+    padding-top: 10px
+
+.wechat-login
+  text-align: center
+  
+.qr-code-container
+  margin: 20px 0
+  min-height: 250px
+  display: flex
+  align-items: center
+  justify-content: center
+  flex-direction: column
+  
+.qr-loading
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: 15px
+  
+  p
+    color: rgba(255, 255, 255, 0.8)
+    margin: 0
+    font-size: 0.9rem
+    
+.qr-ready, .qr-scanned
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: 15px
+  
+  .qr-code
+    border-radius: 12px
+    overflow: hidden
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15)
+    
+.qr-expired
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: 15px
+  
+  .qr-placeholder
+    width: 200px
+    height: 200px
+    background: rgba(255, 255, 255, 0.1)
+    border: 2px dashed rgba(255, 255, 255, 0.3)
+    border-radius: 12px
+    display: flex
+    align-items: center
+    justify-content: center
+    
+    .expired-icon
+      font-size: 48px
+      color: rgba(255, 255, 255, 0.5)
+      
+.qr-tip
+  color: rgba(255, 255, 255, 0.8)
+  margin: 0
+  font-size: 0.9rem
+  line-height: 1.4
+  
+  &.success
+    color: #52c41a
+    
+  &.error
+    color: #ff4d4f
+    
+.refresh-btn
+  color: #1890ff !important
+  padding: 0
+  height: auto
+  font-size: 0.9rem
+  
+  &:hover
+    color: #40a9ff !important
+    
+.wechat-tips
+  margin-top: 20px
+  padding: 15px
+  background: rgba(255, 255, 255, 0.05)
+  border-radius: 8px
+  border: 1px solid rgba(255, 255, 255, 0.1)
+  
+  p
+    color: rgba(255, 255, 255, 0.7)
+    margin: 5px 0
+    font-size: 0.85rem
+    line-height: 1.4
+    text-align: left
+    
+    &:first-child
+      margin-top: 0
+      
+    &:last-child
+      margin-bottom: 0
+
+// 响应式调整
+@media (max-width: 768px)
+  .qr-code-container
+    min-height: 200px
+    
+  .qr-ready, .qr-scanned, .qr-expired
+    .qr-code
+      width: 160px !important
+      height: 160px !important
+      
+  .qr-expired
+    .qr-placeholder
+      width: 160px
+      height: 160px
+      
+      .expired-icon
+        font-size: 36px
+        
+  .wechat-tips
+    margin-top: 15px
+    padding: 12px
+    
+    p
+      font-size: 0.8rem

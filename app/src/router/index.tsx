@@ -4,6 +4,7 @@ import Setting from "@/pages/Setting";
 import Chat from "@/pages/Chat";
 import About from "@/pages/About";
 import Welcome from "@/pages/Welcome";
+import WechatCallback from "@/pages/WechatCallback";
 
 export const routes = createBrowserRouter([
   {
@@ -31,5 +32,9 @@ export const routes = createBrowserRouter([
         element: <Setting />,
       },
     ],
+  },
+  {
+    path: "/auth/wechat/callback",
+    element: <WechatCallback />,
   },
 ]);
