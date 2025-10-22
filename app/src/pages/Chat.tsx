@@ -3,72 +3,35 @@ import { RobotOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Flex, type GetProp, type GetRef } from "antd";
 import React, { useState } from "react";
 import "./style/chat.sass";
+import axios from "axios";
 
 const userAvatar: React.CSSProperties = {
   color: "#1890ff",
   backgroundColor: "#e6f7ff",
 };
 
+const aiAvatar: React.CSSProperties = {
+  color: "#52c41a",
+  backgroundColor: "#f6ffed",
+};
+
+interface Message {
+  key: number;
+  role: 'user' | 'ai';
+  content: string;
+}
+
 const Chat: React.FC = () => {
   const [value, setValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const { message } = App.useApp();
+  const contextId = React.useRef<string>(`session-${Date.now()}`);
 
-  React.useEffect(() => {
-    if (loading) {
-      const timer = setTimeout(() => {
-        setLoading(false);
-        message.success("消息发送成功！");
-      }, 2000);
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-  }, [loading]);
-
-  const text = "Ant Design X love you! ";
-
-  const correctionExamples = [
-    "The weather is nice today.",
-    "The weather is bad today.",
-    "The weather is very nice today.",
-    "Tomorrow the weather will be better.",
-  ];
-
-  
-
-  const rolesAsFunction = (bubbleData: BubbleProps, index: number) => {
-    const RenderIndex: BubbleProps['messageRender'] = (content) => (
-      <Flex>
-        #{index}: {content}
-      </Flex>
-    );
-    switch (bubbleData.role) {
-      case 'ai':
-        return {
-          placement: 'start' as const,
-          avatar: { icon: <UserOutlined />, style: { background: '#fde3cf' } },
-          typing: { step: 5, interval: 20 },
-          style: {
-            maxWidth: 600,
-          },
-          messageRender: RenderIndex,
-        };
-      case 'user':
-        return {
-          placement: 'end' as const,
-          avatar: { icon: <UserOutlined />, style: { background: '#87d068' } },
-          messageRender: RenderIndex,
-        };
-      default:
-        return { messageRender: RenderIndex };
-    }
-  };
-  
   const rolesAsObject: GetProp<typeof Bubble.List, 'roles'> = {
     ai: {
       placement: 'start',
-      avatar: { icon: <UserOutlined />, style: { background: '#fde3cf' } },
+      avatar: { icon: <RobotOutlined />, style: aiAvatar },
       typing: { step: 5, interval: 20 },
       style: {
         maxWidth: 600,
@@ -76,16 +39,57 @@ const Chat: React.FC = () => {
     },
     user: {
       placement: 'end',
-      avatar: { icon: <UserOutlined />, style: { background: '#87d068' } },
+      avatar: { icon: <UserOutlined />, style: userAvatar },
     },
   };
-  
 
-  const [repeat, setRepeat] = React.useState(1);
-  const [correctionDemo, setCorrectionDemo] = React.useState(0);
-  const [count, setCount] = React.useState(3);
-  const [useRolesAsFunction, setUseRolesAsFunction] = React.useState(false);
   const listRef = React.useRef<GetRef<typeof Bubble.List>>(null);
+
+  // 发送消息到后端
+  const sendMessage = async (userMessage: string) => {
+    try {
+      setLoading(true);
+      
+      // 添加用户消息
+      const userMsg: Message = {
+        key: messages.length,
+        role: 'user',
+        content: userMessage,
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      // 调用后端 API（使用相对路径，通过 Vite 代理）
+      const response = await axios.post('/api/chat', {
+        query: userMessage,
+        context_id: contextId.current,
+      });
+
+      const data = response.data;
+      
+      // 添加 AI 回复
+      const aiMsg: Message = {
+        key: messages.length + 1,
+        role: 'ai',
+        content: data.content || '抱歉，我没有收到有效的回复。',
+      };
+      setMessages(prev => [...prev, aiMsg]);
+      
+      message.success("消息发送成功！");
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      message.error("发送消息失败，请检查后端服务是否启动！");
+      
+      // 添加错误消息
+      const errorMsg: Message = {
+        key: messages.length + 1,
+        role: 'ai',
+        content: '抱歉，无法连接到服务器。请确保后端服务正在运行。',
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="chat-container">
       <Bubble
@@ -93,20 +97,17 @@ const Chat: React.FC = () => {
         content="您好！我是 Moss AI 助手，很高兴为您服务。有什么可以帮助您的吗？"
         avatar={{
           icon: <RobotOutlined />,
-          style: userAvatar,
+          style: aiAvatar,
         }}
       />
-          <Bubble.List
-        ref={listRef}
-        style={{ maxHeight: 300, paddingInline: 16 }}
-        roles={useRolesAsFunction ? rolesAsFunction : rolesAsObject}
-        items={Array.from({ length: count }).map((_, i) => {
-          const isAI = !!(i % 2);
-          const content = isAI ? 'Mock AI content. '.repeat(20) : 'Mock user content.';
-
-          return { key: i, role: isAI ? 'ai' : 'user', content };
-        })}
-      />
+      {messages.length > 0 && (
+        <Bubble.List
+          ref={listRef}
+          style={{ maxHeight: 500, paddingInline: 16 }}
+          roles={rolesAsObject}
+          items={messages}
+        />
+      )}
       <Flex className="chat-input-container">
         <Sender
           className="chat-input"
@@ -120,9 +121,10 @@ const Chat: React.FC = () => {
               message.warning("请输入消息内容！");
               return;
             }
+            const userMessage = value;
             setValue("");
-            setLoading(true);
             message.info("正在发送消息...");
+            sendMessage(userMessage);
           }}
           onCancel={() => {
             setLoading(false);

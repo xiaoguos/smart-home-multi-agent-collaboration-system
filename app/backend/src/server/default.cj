@@ -12,6 +12,7 @@ let server = ServerBuilder().addr("127.0.0.1").port(2100).build()
 
 public func startServer(): Unit {
     server.distributor.register("/hello", hello)
+    server.distributor.register("/api/chat", chat)
 
     server.logger.level = LogLevel.ALL
 
