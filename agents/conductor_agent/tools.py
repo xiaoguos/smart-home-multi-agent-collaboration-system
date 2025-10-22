@@ -12,13 +12,14 @@ from a2a.types import Message, Part
 from a2a.client.client import ClientConfig
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
-
 
 # 数据库文件路径
 DB_PATH = "user_behavior.db"
@@ -636,3 +637,97 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
             "error": str(e),
             "message": "调用数据挖掘代理失败"
         }, indent=2, ensure_ascii=False)
+
+
+# ==================== 小米设备信息 MCP 工具 ====================
+
+async def _call_xiaomi_mcp_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
+    """异步调用小米设备信息 MCP 工具"""
+    import sys
+    import os
+    
+    try:
+        # 获取 MCP 服务脚本路径
+        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        mcp_script = os.path.join(current_dir, "mcp", "xiaomi_device_mcp.py")
+        
+        # 创建 MCP 服务器参数
+        server_params = StdioServerParameters(
+            command=sys.executable,
+            args=[mcp_script],
+            env=None
+        )
+        
+        # 使用上下文管理器确保资源正确释放
+        async with stdio_client(server_params) as (stdio, write):
+            session = ClientSession(stdio, write)
+            await session.initialize()
+            
+            logger.info(f"调用小米设备 MCP 工具: {tool_name}")
+            
+            # 调用工具
+            result = await session.call_tool(tool_name, arguments)
+            
+            # 提取结果
+            if result and len(result.content) > 0:
+                content = result.content[0]
+                if hasattr(content, 'text'):
+                    return content.text
+                else:
+                    return str(content)
+            
+            return json.dumps({
+                "success": False,
+                "message": "MCP 工具返回空结果"
+            }, ensure_ascii=False, indent=2)
+        
+    except Exception as e:
+        logger.error(f"调用 MCP 工具异常: {str(e)}", exc_info=True)
+        return json.dumps({
+            "success": False,
+            "message": f"调用 MCP 工具异常: {str(e)}"
+        }, ensure_ascii=False, indent=2)
+
+
+def _call_xiaomi_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
+    """同步调用小米设备信息 MCP 工具"""
+    coro = _call_xiaomi_mcp_tool_async(tool_name, arguments)
+    return _run_async_in_thread(coro)
+
+
+class XiaomiDevicesArgs(BaseModel):
+    username: str = Field(..., description="小米账号（邮箱、手机号或用户ID）")
+    password: str = Field(..., description="小米账号密码")
+    server: str = Field(default="cn", description="服务器区域，可选：cn, de, us, ru, tw, sg, in, i2")
+    skip_login: bool = Field(default=False, description="是否跳过登录直接使用默认token")
+
+
+@tool("get_xiaomi_devices", args_schema=XiaomiDevicesArgs,
+     description="获取小米智能设备信息，一次性完成登录和设备查询")
+def get_xiaomi_devices(username: str, password: str, server: str = "cn", skip_login: bool = False):
+    """
+    获取小米智能设备信息（包含登录、获取设备列表等完整流程）
+    
+    Args:
+        username: 小米账号（邮箱、手机号或用户ID）
+        password: 小米账号密码
+        server: 服务器区域（默认：cn）
+        skip_login: 是否跳过登录，直接使用默认token（默认：False）
+    
+    Returns:
+        设备列表，包含设备名称、ID、MAC地址、IP地址、Token、型号等
+    """
+    try:
+        logger.info(f"正在获取小米设备信息: {username}, 服务器: {server}, 跳过登录: {skip_login}")
+        return _call_xiaomi_mcp_tool("get_xiaomi_devices", {
+            "username": username,
+            "password": password,
+            "server": server,
+            "skip_login": skip_login
+        })
+    except Exception as e:
+        logger.error(f"获取小米设备信息失败: {str(e)}", exc_info=True)
+        return json.dumps({
+            "success": False,
+            "message": f"获取设备信息失败: {str(e)}"
+        }, ensure_ascii=False, indent=2)

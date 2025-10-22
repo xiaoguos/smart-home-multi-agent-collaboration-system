@@ -9,7 +9,7 @@ from a2a.client.client import ClientConfig
 async def main():
     logging.basicConfig(level=logging.INFO)
 
-    base_url = 'http://localhost:12004'
+    base_url = 'http://localhost:12000'
 
     async with httpx.AsyncClient(timeout=30.0) as httpx_client:
         resolver = A2ACardResolver(httpx_client=httpx_client, base_url=base_url)
@@ -32,7 +32,7 @@ async def main():
         message = Message(
             context_id=str(uuid4()),
             role='user',
-            parts=[Part(kind='text', text='打开白色的灯')],
+            parts=[Part(kind='text', text='当前设备信息')],
             message_id=uuid4().hex
         )
 

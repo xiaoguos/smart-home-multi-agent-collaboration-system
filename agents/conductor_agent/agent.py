@@ -16,7 +16,8 @@ from tools import (
     get_system_overview,
     analyze_user_behavior,
     get_user_insights,
-    query_data_mining_agent
+    query_data_mining_agent,
+    get_xiaomi_devices
 )
 
 memory = MemorySaver()
@@ -36,6 +37,7 @@ class ConductorAgent:
         '2. 协调不同代理之间的工作'
         '3. 提供统一的智能家居控制接口'
         '4. 监控系统整体状态'
+        '5. 管理小米智能设备信息查询'
         ''
         '你可以执行以下操作：'
         '- 列出所有可用的代理服务：使用 list_available_agents 工具'
@@ -46,6 +48,11 @@ class ConductorAgent:
         '- 分析用户行为：使用 analyze_user_behavior 工具'
         '- 获取用户洞察：使用 get_user_insights 工具'
         '- **场景智能分析**：使用 query_data_mining_agent 工具（重要！）'
+        ''
+        '小米设备信息管理：'
+        '- 获取小米设备信息：使用 get_xiaomi_devices 工具'
+        '  需要提供：username（小米账号）、password（密码）、server（服务器区域，默认cn）'
+        '  返回：所有小米设备的详细信息，包括Token、IP、MAC等'
         ''
         '设备控制指南：'
         '当用户说"开启空调"、"打开空调"、"关闭空调"等命令时，使用 control_device 工具：'
@@ -101,7 +108,8 @@ class ConductorAgent:
             get_system_overview,
             analyze_user_behavior,
             get_user_insights,
-            query_data_mining_agent
+            query_data_mining_agent,
+            get_xiaomi_devices
         ]
 
         self.graph = create_react_agent(
@@ -139,6 +147,8 @@ class ConductorAgent:
                     tip = '正在生成用户洞察…'
                 elif any(name == 'query_data_mining_agent' for name in tool_names):
                     tip = '正在分析场景并挖掘使用习惯…'
+                elif any(name == 'get_xiaomi_devices' for name in tool_names):
+                    tip = '正在获取小米设备信息…'
                 else:
                     tip = '正在处理您的请求…'
                 yield {
