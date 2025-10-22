@@ -1,6 +1,6 @@
-import { Sender, Bubble, type BubbleProps } from "@ant-design/x";
+import { Sender, Bubble } from "@ant-design/x";
 import { RobotOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Flex, type GetProp, type GetRef } from "antd";
+import { App, Flex } from "antd";
 import React, { useState } from "react";
 import "./style/chat.sass";
 import axios from "axios";
@@ -28,22 +28,6 @@ const Chat: React.FC = () => {
   const { message } = App.useApp();
   const contextId = React.useRef<string>(`session-${Date.now()}`);
 
-  const rolesAsObject: GetProp<typeof Bubble.List, 'roles'> = {
-    ai: {
-      placement: 'start',
-      avatar: { icon: <RobotOutlined />, style: aiAvatar },
-      typing: { step: 5, interval: 20 },
-      style: {
-        maxWidth: 600,
-      },
-    },
-    user: {
-      placement: 'end',
-      avatar: { icon: <UserOutlined />, style: userAvatar },
-    },
-  };
-
-  const listRef = React.useRef<GetRef<typeof Bubble.List>>(null);
 
   // 发送消息到后端
   const sendMessage = async (userMessage: string) => {
@@ -101,12 +85,19 @@ const Chat: React.FC = () => {
         }}
       />
       {messages.length > 0 && (
-        <Bubble.List
-          ref={listRef}
-          style={{ maxHeight: 500, paddingInline: 16 }}
-          roles={rolesAsObject}
-          items={messages}
-        />
+        <div style={{ maxHeight: 500, paddingInline: 16 }}>
+          {messages.map((msg) => (
+            <Bubble
+              key={msg.key}
+              placement={msg.role === 'ai' ? 'start' : 'end'}
+              content={msg.content}
+              avatar={{
+                icon: msg.role === 'ai' ? <RobotOutlined /> : <UserOutlined />,
+                style: msg.role === 'ai' ? aiAvatar : userAvatar,
+              }}
+            />
+          ))}
+        </div>
       )}
       <Flex className="chat-input-container">
         <Sender
