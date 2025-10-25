@@ -1,9 +1,5 @@
-from collections.abc import AsyncIterable
-from typing import Any, Literal
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+# 床头灯 Agent
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
@@ -42,15 +38,9 @@ def main(host, port):
     """Starts the Bedside Lamp Agent server."""
     try:
         capabilities = AgentCapabilities(
-            type="bedside_lamp",
-            supported_commands=["开启", "关闭", "查询状态", "设置亮度", "设置色温", "设置颜色", "场景模式"],
-            properties={
-                "power_state": "off",
-                "brightness": 0,
-                "color_temp": 4000,
-                "color_mode": 1,
-                "color": 0,
-            },
+            push_notifications=False,
+            state_transition_history=False,
+            streaming=False,
         )
         skill = AgentSkill(
             id="control_bedside_lamp",

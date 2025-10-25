@@ -12,8 +12,6 @@ from a2a.types import Message, Part
 from a2a.client.client import ClientConfig
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -639,60 +637,119 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
         }, indent=2, ensure_ascii=False)
 
 
-# ==================== 小米设备信息 MCP 工具 ====================
+# ==================== 小米设备信息直接获取 ====================
 
-async def _call_xiaomi_mcp_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
-    """异步调用小米设备信息 MCP 工具"""
+def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn", skip_login: bool = False) -> str:
+    """直接获取小米设备信息，不使用 MCP"""
     import sys
     import os
     
     try:
-        # 获取 MCP 服务脚本路径
+        # 导入小米设备连接器
         current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        mcp_script = os.path.join(current_dir, "mcp", "xiaomi_device_mcp.py")
+        mcp_dir = os.path.join(current_dir, "mcp")
+        if mcp_dir not in sys.path:
+            sys.path.insert(0, mcp_dir)
         
-        # 创建 MCP 服务器参数
-        server_params = StdioServerParameters(
-            command=sys.executable,
-            args=[mcp_script],
-            env=None
-        )
+        from divice import XiaomiCloudConnector
         
-        # 使用上下文管理器确保资源正确释放
-        async with stdio_client(server_params) as (stdio, write):
-            session = ClientSession(stdio, write)
-            await session.initialize()
-            
-            logger.info(f"调用小米设备 MCP 工具: {tool_name}")
-            
-            # 调用工具
-            result = await session.call_tool(tool_name, arguments)
-            
-            # 提取结果
-            if result and len(result.content) > 0:
-                content = result.content[0]
-                if hasattr(content, 'text'):
-                    return content.text
-                else:
-                    return str(content)
-            
+        logger.info(f"开始获取小米设备信息: {username}, 服务器: {server}, 跳过登录: {skip_login}")
+        
+        # 1. 创建连接器
+        connector = XiaomiCloudConnector(username, password)
+        
+        # 如果不跳过登录，则执行真正的登录
+        if not skip_login:
+            logged_in = connector.login()
+            if not logged_in:
+                return json.dumps({
+                    "success": False,
+                    "message": "小米账号登录失败，请检查用户名和密码",
+                }, ensure_ascii=False, indent=2)
+            logger.info("登录成功，开始获取设备列表")
+        else:
+            # 跳过登录，直接使用 divice.py 中的默认 token 和参数
+            logger.info("跳过登录，使用默认参数")
+        
+        # 2. 获取所有家庭
+        all_homes = []
+        
+        # 获取用户自己的家庭
+        homes = connector.get_homes(server)
+        if homes is not None and 'result' in homes and 'homelist' in homes['result']:
+            for h in homes['result']['homelist']:
+                all_homes.append({
+                    'home_id': h['id'],
+                    'home_owner': connector.userId,
+                    'home_name': h.get('name', '未命名家庭')
+                })
+        
+        # 获取共享家庭
+        dev_cnt = connector.get_dev_cnt(server)
+        if dev_cnt is not None and 'result' in dev_cnt and 'share' in dev_cnt['result']:
+            share_families = dev_cnt['result']['share'].get('share_family', [])
+            for h in share_families:
+                all_homes.append({
+                    'home_id': h['home_id'],
+                    'home_owner': h['home_owner'],
+                    'home_name': h.get('name', '共享家庭')
+                })
+        
+        if len(all_homes) == 0:
             return json.dumps({
                 "success": False,
-                "message": "MCP 工具返回空结果"
+                "message": f"在服务器 {server} 上未找到任何家庭",
             }, ensure_ascii=False, indent=2)
         
+        # 3. 获取所有设备
+        all_devices = []
+        for home in all_homes:
+            devices = connector.get_devices(server, home['home_id'], home['home_owner'])
+            
+            if devices is not None and 'result' in devices and 'device_info' in devices['result']:
+                device_list = devices['result']['device_info']
+                
+                if device_list:
+                    for device in device_list:
+                        device_data = {
+                            "home_name": home.get('home_name'),
+                            "home_id": home['home_id'],
+                            "name": device.get('name', '未命名设备'),
+                            "did": device.get('did'),
+                            "mac": device.get('mac'),
+                            "ip": device.get('localip'),
+                            "token": device.get('token'),
+                            "model": device.get('model'),
+                            "isOnline": device.get('isOnline', False),
+                            "rssi": device.get('rssi'),
+                        }
+                        
+                        # 如果是蓝牙设备，获取 BLE key
+                        if device.get('did') and 'blt' in device['did']:
+                            beaconkey = connector.get_beaconkey(server, device['did'])
+                            if beaconkey and 'result' in beaconkey and 'beaconkey' in beaconkey['result']:
+                                device_data['ble_key'] = beaconkey['result']['beaconkey']
+                        
+                        all_devices.append(device_data)
+        
+        logger.info(f"成功获取 {len(all_devices)} 个设备")
+        
+        return json.dumps({
+            "success": True,
+            "message": f"成功获取设备列表",
+            "userId": connector.userId,
+            "server": server,
+            "total_homes": len(all_homes),
+            "total_devices": len(all_devices),
+            "devices": all_devices,
+        }, ensure_ascii=False, indent=2)
+        
     except Exception as e:
-        logger.error(f"调用 MCP 工具异常: {str(e)}", exc_info=True)
+        logger.error(f"获取设备信息异常: {str(e)}", exc_info=True)
         return json.dumps({
             "success": False,
-            "message": f"调用 MCP 工具异常: {str(e)}"
+            "message": f"获取设备信息异常: {str(e)}",
         }, ensure_ascii=False, indent=2)
-
-
-def _call_xiaomi_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
-    """同步调用小米设备信息 MCP 工具"""
-    coro = _call_xiaomi_mcp_tool_async(tool_name, arguments)
-    return _run_async_in_thread(coro)
 
 
 class XiaomiDevicesArgs(BaseModel):
@@ -703,7 +760,7 @@ class XiaomiDevicesArgs(BaseModel):
 
 
 @tool("get_xiaomi_devices", args_schema=XiaomiDevicesArgs,
-     description="获取小米智能设备信息，一次性完成登录和设备查询")
+     description="获取小米智能设备信，一次性完成登录和设备查询")
 def get_xiaomi_devices(username: str, password: str, server: str = "cn", skip_login: bool = False):
     """
     获取小米智能设备信息（包含登录、获取设备列表等完整流程）
@@ -719,12 +776,8 @@ def get_xiaomi_devices(username: str, password: str, server: str = "cn", skip_lo
     """
     try:
         logger.info(f"正在获取小米设备信息: {username}, 服务器: {server}, 跳过登录: {skip_login}")
-        return _call_xiaomi_mcp_tool("get_xiaomi_devices", {
-            "username": username,
-            "password": password,
-            "server": server,
-            "skip_login": skip_login
-        })
+        # 直接调用获取函数，不使用 MCP
+        return _get_xiaomi_devices_direct(username, password, server, skip_login)
     except Exception as e:
         logger.error(f"获取小米设备信息失败: {str(e)}", exc_info=True)
         return json.dumps({

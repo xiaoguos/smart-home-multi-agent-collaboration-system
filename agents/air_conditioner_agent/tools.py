@@ -4,7 +4,7 @@ import json
 from pydantic import BaseModel, Field
 
 
-device = AirConditioningCompanionMcn02(ip="192.168.110.127", token="1724bf8d57b355173dfa08ae23367f86")
+device = AirConditioningCompanionMcn02(ip="192.168.110.124", token="1724bf8d57b355173dfa08ae23367f86")
 
 
 @tool("get_ac_status", description="获取空调当前状态")

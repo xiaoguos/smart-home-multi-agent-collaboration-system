@@ -1,5 +1,4 @@
-from collections.abc import AsyncIterable
-from typing import Any
+# 数据挖掘用户习惯分析 Agent
 from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
@@ -36,13 +35,9 @@ def main(host, port):
     """启动数据挖掘Agent服务器"""
     try:
         capabilities = AgentCapabilities(
-            type="data_mining",
-            supported_commands=["场景识别", "习惯分析", "偏好挖掘", "行为预测"],
-            properties={
-                "database_type": "starrocks",
-                "analysis_methods": ["scene_recognition", "pattern_analysis", "preference_mining", "action_prediction"],
-                "supported_scenes": ["睡觉", "起床", "离家", "回家", "工作", "休息"],
-            },
+            push_notifications=False,
+            state_transition_history=False,
+            streaming=False,
         )
         skill = AgentSkill(
             id="mine_user_behavior",
