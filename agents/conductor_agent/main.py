@@ -1,6 +1,4 @@
 # 家庭管家Agent
-from langgraph.checkpoint.memory import MemorySaver
-from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -19,28 +17,23 @@ from a2a.server.tasks import (
     InMemoryTaskStore,
 )
 from executor import ConductorAgentExecutor
-
-memory = MemorySaver()
 from agent import ConductorAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class ResponseFormat(BaseModel):
-    message: str
-
-
 @click.command()
 @click.option("--host", "host", default="localhost")
 @click.option("--port", "port", default=12000)
-def main(host, port):
+@click.option("--debug", "debug_mode", is_flag=True, default=False, help="启用 debug 模式（兼容 PyCharm debugger）")
+def main(host, port, debug_mode):
     """Starts the Conductor Agent server."""
     try:
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,
-            streaming=False,
+            streaming=True,
         )
         skill = AgentSkill(
             id="smart_home_management",
@@ -83,7 +76,27 @@ def main(host, port):
             agent_card=agent_card, http_handler=request_handler
         )
 
-        uvicorn.run(server.build(), host=host, port=port)
+        # 检测是否在 PyCharm debugger 中运行
+        is_debugging = sys.gettrace() is not None or debug_mode
+        
+        if is_debugging:
+            # PyCharm Debug 模式：使用兼容的方式启动
+            logger.info(f"🐛 Starting in DEBUG mode on {host}:{port}")
+            logger.info("使用 uvicorn.Config + uvicorn.Server 方式（兼容 PyCharm debugger）")
+            
+            import asyncio
+            config = uvicorn.Config(
+                server.build(), 
+                host=host, 
+                port=port,
+                log_level="info"
+            )
+            server_instance = uvicorn.Server(config)
+            asyncio.run(server_instance.serve())
+        else:
+            # 正常模式：使用标准方式
+            logger.info(f"🚀 Starting in NORMAL mode on {host}:{port}")
+            uvicorn.run(server.build(), host=host, port=port)
         # --8<-- [end:DefaultRequestHandler]
 
     except Exception as e:

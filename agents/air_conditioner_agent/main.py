@@ -1,6 +1,4 @@
 # 空调 Agent
-from langgraph.checkpoint.memory import MemorySaver
-from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -19,16 +17,10 @@ from a2a.server.tasks import (
     InMemoryTaskStore,
 )
 from executor import AirConditionerAgentExecutor
-
-memory = MemorySaver()
 from agent import AirConditionerAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class ResponseFormat(BaseModel):
-    message: str
 
 
 @click.command()

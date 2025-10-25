@@ -94,9 +94,6 @@ class AirPurifierAgentExecutor(AgentExecutor):
             raise ServerError(error=InternalError()) from e
 
     def _validate_request(self, context: RequestContext) -> bool:
-        return False
-
-    def _validate_request(self, context: RequestContext) -> bool:
         # 这里可以添加请求验证逻辑
         # 返回 True 表示有错误，False 表示验证通过
         return False

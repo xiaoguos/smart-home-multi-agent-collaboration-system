@@ -1,6 +1,4 @@
 # 床头灯 Agent
-from langgraph.checkpoint.memory import MemorySaver
-from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -9,7 +7,7 @@ from a2a.types import (
 import sys
 import click
 import logging
-import uvicorn  
+import uvicorn
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 import httpx
@@ -19,16 +17,10 @@ from a2a.server.tasks import (
     InMemoryTaskStore,
 )
 from executor import BedsideLampAgentExecutor
-
-memory = MemorySaver()
 from agent import BedsideLampAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class ResponseFormat(BaseModel):
-    message: str
 
 
 @click.command()
@@ -40,7 +32,7 @@ def main(host, port):
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,
-            streaming=False,
+            streaming=True,
         )
         skill = AgentSkill(
             id="control_bedside_lamp",

@@ -1,26 +1,22 @@
 from langchain_core.tools import tool
 import json
-import httpx
 from pydantic import BaseModel, Field
-from typing import Dict, List, Any
+from typing import Dict, Any
 import asyncio
-import sqlite3
-from datetime import datetime
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
+from datetime import datetime
+import httpx
 from a2a.client import ClientFactory, A2ACardResolver
 from a2a.types import Message, Part
 from a2a.client.client import ClientConfig
-import logging
-from concurrent.futures import ThreadPoolExecutor
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
-
-# 数据库文件路径
-DB_PATH = "user_behavior.db"
 
 # 注册的代理服务配置
 # 端口分配：
@@ -53,12 +49,6 @@ REGISTERED_AGENTS = {
         "url": "http://localhost:12004",
         "description": "控制Yeelink床头灯设备",
         "capabilities": ["电源控制", "亮度调节", "色温设置", "颜色设置", "场景模式", "阅读模式", "睡眠模式", "浪漫模式", "夜灯模式"]
-    },
-    "data_mining": {
-        "name": "数据挖掘代理",
-        "url": "http://localhost:12003",
-        "description": "分析用户行为和设备使用习惯，提供智能建议",
-        "capabilities": ["场景识别", "习惯分析", "偏好挖掘", "行为预测", "智能建议", "RAG数据挖掘"]
     }
 }
 
@@ -312,49 +302,6 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         # 调用 A2A agent 执行实际控制 (现在是同步函数，会在线程中运行)
         result = call_a2a_agent(agent_url, command)
         
-        # 暂时不记录操作日志到数据库
-        # success = result.get("success", False)
-        # try:
-        #     conn = sqlite3.connect(DB_PATH)
-        #     cursor = conn.cursor()
-        #     
-        #     # 确保表存在
-        #     cursor.execute('''
-        #         CREATE TABLE IF NOT EXISTS device_operations (
-        #             id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #             user_id TEXT NOT NULL,
-        #             device_type TEXT NOT NULL,
-        #             device_name TEXT NOT NULL,
-        #             action TEXT NOT NULL,
-        #             parameters TEXT,
-        #             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        #             success BOOLEAN DEFAULT TRUE,
-        #             response TEXT
-        #         )
-        #     ''')
-        #     
-        #     # 插入操作记录
-        #     cursor.execute('''
-        #         INSERT INTO device_operations 
-        #         (user_id, device_type, device_name, action, parameters, success, response)
-        #         VALUES (?, ?, ?, ?, ?, ?, ?)
-        #     ''', (
-        #         "default_user",  # 默认用户ID，实际应用中应该从上下文获取
-        #         device_type,
-        #         agent_config["name"],
-        #         action,
-        #         json.dumps(parameters) if parameters else None,
-        #         success,
-        #         json.dumps(result)
-        #     ))
-        #     
-        #     conn.commit()
-        #     conn.close()
-        #     logger.info("设备操作已记录到数据库")
-        #     
-        # except Exception as log_error:
-        #     logger.warning(f"日志记录失败: {log_error}")
-        
         success = result.get("success", False)
         if success:
             logger.info(f"成功控制 {agent_config['name']}")
@@ -464,100 +411,25 @@ def analyze_user_behavior(user_id: str = "default_user", days: int = 30):
 def get_user_insights(user_id: str = "default_user"):
     """获取基于历史数据的用户洞察和个性化建议"""
     try:
-        # 查询数据库获取用户操作历史
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # 获取最近的操作记录
-        cursor.execute('''
-            SELECT device_type, action, parameters, timestamp
-            FROM device_operations 
-            WHERE user_id = ? 
-            ORDER BY timestamp DESC 
-            LIMIT 20
-        ''', (user_id,))
-        
-        operations = cursor.fetchall()
-        conn.close()
-        
-        if not operations:
-            return json.dumps({
-                "message": f"用户 {user_id} 暂无操作记录",
-                "user_id": user_id,
-                "insights": [],
-                "suggestions": ["开始使用智能设备以获得个性化建议"]
-            }, indent=2, ensure_ascii=False)
-        
-        # 分析操作模式
-        device_usage = {}
-        time_patterns = []
-        temperature_settings = []
-        
-        for op in operations:
-            device_type, action, parameters, timestamp = op
-            
-            # 统计设备使用
-            if device_type not in device_usage:
-                device_usage[device_type] = 0
-            device_usage[device_type] += 1
-            
-            # 分析时间模式
-            hour = datetime.fromisoformat(timestamp).hour
-            time_patterns.append(hour)
-            
-            # 分析温度设置
-            if device_type == 'air_conditioner' and action == 'set_temperature' and parameters:
-                try:
-                    params = json.loads(parameters)
-                    if 'temperature' in params:
-                        temperature_settings.append(params['temperature'])
-                except:
-                    pass
-        
-        # 生成洞察
-        insights = []
-        
-        if device_usage:
-            most_used_device = max(device_usage, key=device_usage.get)
-            insights.append({
-                "type": "most_used_device",
-                "data": {"device": most_used_device, "count": device_usage[most_used_device]},
-                "description": f"最常使用的设备是 {most_used_device}"
-            })
-        
-        if time_patterns:
-            from collections import Counter
-            time_counter = Counter(time_patterns)
-            peak_hour = time_counter.most_common(1)[0][0]
-            insights.append({
-                "type": "peak_usage_time",
-                "data": {"hour": peak_hour, "count": time_counter[peak_hour]},
-                "description": f"最常使用设备的时间是 {peak_hour}:00"
-            })
-        
-        if temperature_settings:
-            avg_temp = sum(temperature_settings) / len(temperature_settings)
-            insights.append({
-                "type": "temperature_preference",
-                "data": {"average": round(avg_temp, 1), "count": len(temperature_settings)},
-                "description": f"平均偏好温度是 {round(avg_temp, 1)} 度"
-            })
-        
-        # 生成建议
-        suggestions = []
-        if most_used_device == 'air_conditioner':
-            suggestions.append("建议设置空调自动模式，根据时间自动调节")
-        if peak_hour in [19, 20, 21]:
-            suggestions.append("检测到您通常在晚上使用设备，建议设置定时任务")
-        if temperature_settings and avg_temp > 26:
-            suggestions.append("建议适当降低温度设置以节省能源")
-        
+        # 简化版本：返回模拟的用户洞察
+        # 实际应用中应该调用数据挖掘代理获取真实数据
         return json.dumps({
             "message": f"用户 {user_id} 洞察分析完成",
             "user_id": user_id,
-            "total_operations": len(operations),
-            "insights": insights,
-            "suggestions": suggestions,
+            "insights": [
+                {
+                    "type": "device_usage_pattern",
+                    "description": "建议通过数据挖掘代理获取详细的使用习惯分析"
+                },
+                {
+                    "type": "recommendation",
+                    "description": "使用 query_data_mining_agent 工具获取个性化建议"
+                }
+            ],
+            "suggestions": [
+                "建议使用数据挖掘代理进行深度分析",
+                "可以通过描述场景（如'我要睡觉了'）获取智能建议"
+            ],
             "generated_at": datetime.now().isoformat()
         }, indent=2, ensure_ascii=False)
         

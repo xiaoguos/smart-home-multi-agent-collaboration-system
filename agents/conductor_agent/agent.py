@@ -1,10 +1,9 @@
 from collections.abc import AsyncIterable
-from typing import Any, Literal
+from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
-from pydantic import BaseModel
 
 import logging
 
@@ -24,9 +23,6 @@ memory = MemorySaver()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-class ResponseFormat(BaseModel):
-    message: str
 
 class ConductorAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
