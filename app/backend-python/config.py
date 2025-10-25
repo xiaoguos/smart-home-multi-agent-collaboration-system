@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     """应用配置"""
     
     # 服务配置
-    HOST: str = "127.0.0.1"
-    PORT: int = 2100
+    HOST: str = "0.0.0.0"
+    PORT: int = 3000
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     
