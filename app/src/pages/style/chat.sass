@@ -1,7 +1,15 @@
 .chat-container
-    position: relative
+    display: flex
+    flex-direction: column
     height: 100%
 
+.chat-messages
+    flex: 1
+    overflow: auto
+    padding: 16px
+
+.chat-input-container
+    padding: 16px
+
 .chat-input
-    position: absolute
     bottom: 0

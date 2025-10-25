@@ -185,6 +185,11 @@ export class HttpClient {
    * 错误处理
    */
   private handleError(error: any): Error {
+    // 处理请求取消错误
+    if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+      return error; // 直接返回原始的 AbortError，保持 name 属性
+    }
+    
     if (error.code === 'ECONNREFUSED') {
       return new Error('无法连接到服务器，请确保服务已启动');
     } else if (error.code === 'ETIMEDOUT') {

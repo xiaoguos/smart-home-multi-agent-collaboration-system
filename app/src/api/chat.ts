@@ -20,10 +20,11 @@ export interface ChatResponse {
  */
 export async function sendChatMessage(
   query: string,
-  contextId?: string
+  contextId?: string,
+  signal?: AbortSignal
 ): Promise<ChatResponse> {
   return await httpClient.post<ChatResponse>('/api/v1/chat', {
     query,
     context_id: contextId,
-  });
+  }, { signal });
 }
