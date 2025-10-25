@@ -13,6 +13,7 @@ package-configuration = {  }
 
 [dependencies]
 mysql = {git = "https://gitcode.com/Cangjie-SIG/mysql-driver.git", branch="master"}
+httpclient4cj = {git = "https://gitcode.com/Cangjie-TPC/httpclient4cj.git", branch="develop"}
 
 [target]
   [target.aarch64-linux-ohos]
@@ -28,5 +29,6 @@ mysql = {git = "https://gitcode.com/Cangjie-SIG/mysql-driver.git", branch="maste
     [target.x86_64-unknown-windows-gnu.bin-dependencies]
       path-option = [ "${X86_64_LIBS}", "${X86_64_MACRO_LIBS}" ]
       [target.x86_64-unknown-windows-gnu.bin-dependencies.package-option]
-  [target.x86_64-w64-mingw32.bin-dependencies]
-    path-option = ["D:\\Project\\cangjie_stdx\\dynamic\\stdx"]
+  [target.x86_64-w64-mingw32] 
+    [target.x86_64-w64-mingw32.bin-dependencies]
+      path-option = ["D:\\cangjie\\modules\\windows_x86_64_llvm\\stdx\\dynamic\\stdx"]

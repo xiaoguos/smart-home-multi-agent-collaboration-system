@@ -11,7 +11,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 # 设备配置
-LAMP_IP = "192.168.110.128"
+LAMP_IP = "192.168.110.129"
 LAMP_TOKEN = "4a90f98aaa1273ca34685d66d6e13958"
 LAMP_MODEL = "yeelink.light.bslamp2"
 

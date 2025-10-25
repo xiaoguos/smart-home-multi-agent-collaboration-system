@@ -1,9 +1,5 @@
-from collections.abc import AsyncIterable
-from typing import Any, Literal
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+# 家庭管家Agent
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
@@ -42,14 +38,9 @@ def main(host, port):
     """Starts the Conductor Agent server."""
     try:
         capabilities = AgentCapabilities(
-            type="conductor",
-            supported_commands=["管理代理", "控制设备", "系统监控", "状态查询", "行为分析", "用户洞察"],
-            properties={
-                "managed_agents": ["air_conditioner", "air_cleaner", "data_mining"],
-                "system_status": "running",
-                "total_devices": 3,
-                "logging_enabled": True,
-            },
+            push_notifications=False,
+            state_transition_history=False,
+            streaming=False,
         )
         skill = AgentSkill(
             id="smart_home_management",

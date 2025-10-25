@@ -1,9 +1,5 @@
-from collections.abc import AsyncIterable
-from typing import Any, Literal
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+# 空气净化器 Agent
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 from a2a.types import (
     AgentCapabilities,
@@ -42,16 +38,9 @@ def main(host, port):
     """Starts the Air Purifier Agent server."""
     try:
         capabilities = AgentCapabilities(
-            type="air_purifier",
-            supported_commands=["开启", "关闭", "查询状态", "设置风扇", "设置模式", "调节LED"],
-            properties={
-                "pm25": 0,
-                "humidity": 0,
-                "fan_level": 1,
-                "mode": 0,
-                "power_state": "off",
-                "filter_life": 100,
-            },
+            push_notifications=False,
+            state_transition_history=False,
+            streaming=False,
         )
         skill = AgentSkill(
             id="control_air_purifier",

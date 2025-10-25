@@ -10,7 +10,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 # 设备配置
-PURIFIER_IP = "192.168.110.129"
+PURIFIER_IP = "192.168.110.123"
 PURIFIER_TOKEN = "569905df67a11d6b67a575097255c798"
 PURIFIER_MODEL = "zhimi.airp.oa1"
 
