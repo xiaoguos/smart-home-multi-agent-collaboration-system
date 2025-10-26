@@ -73,10 +73,6 @@ export async function getAIModels(isActive?: boolean): Promise<AIModel[]> {
   return await httpClient.get('/api/v1/config/ai-models', { params });
 }
 
-export async function getDefaultAIModel(): Promise<AIModel> {
-  return await httpClient.get('/api/v1/config/ai-models/default');
-}
-
 export async function getAIModel(modelId: number): Promise<AIModel> {
   return await httpClient.get(`/api/v1/config/ai-models/${modelId}`);
 }

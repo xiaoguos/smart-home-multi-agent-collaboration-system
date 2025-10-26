@@ -1,15 +1,10 @@
 *
-  margin: 0;
-  padding: 0;
+  margin: 0
+  padding: 0
 
 body
-  margin: 0;
-  padding: 0;
-
-
-:deep(.ant-layout)
-  padding: 0;
-
+  margin: 0
+  padding: 0
 .header
   background: #fff
   border-bottom: 1px solid #f0f0f0
@@ -28,3 +23,27 @@ body
   height: 32px
   background: #1890ff
   border-radius: 4px
+
+.app
+  height: 100vh
+  display: flex
+  flex-direction: column
+  overflow: hidden
+
+  .app-content
+    flex: 1
+    display: flex
+    overflow: hidden
+
+    .ant-layout-sider
+      height: 100%
+      overflow-y: auto
+
+    .ant-layout
+      height: 100%
+      overflow: hidden
+
+      .ant-layout-content
+        height: 100%
+        overflow-y: auto
+        padding: 24px
