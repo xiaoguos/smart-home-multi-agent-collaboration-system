@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterable
 from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
@@ -57,11 +56,6 @@ class AirPurifierAgent:
         '始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。'
     )
 
-    FORMAT_INSTRUCTION = (
-        '如果用户需要提供更多信息来完成请求，请将响应状态设置为 input_required。'
-        '如果在处理请求时出现错误，请将响应状态设置为 error。'
-        '如果请求已完成，请将响应状态设置为 completed。'
-    )
     def __init__(self):
         self.model = ChatOpenAI(
                 model='deepseek-chat',
@@ -84,43 +78,15 @@ class AirPurifierAgent:
             prompt=self.SYSTEM_PROMPT,
         )
 
-    async def stream(self, query, context_id) -> AsyncIterable[dict[str, Any]]:
+    async def invoke(self, query, context_id) -> dict[str, Any]:
+        """非流式调用，直接返回最终结果"""
         inputs = {'messages': [('user', query)]}
         config = {'configurable': {'thread_id': context_id}}
-
-        for item in self.graph.stream(inputs, config, stream_mode='values'):
-            message = item['messages'][-1]
-            if (
-                isinstance(message, AIMessage)
-                and message.tool_calls
-                and len(message.tool_calls) > 0
-            ):
-                tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in message.tool_calls]
-                if any(name == 'set_purifier_power' for name in tool_names):
-                    tip = '正在切换空气净化器电源…'
-                elif any(name == 'get_purifier_status' for name in tool_names):
-                    tip = '正在查询空气净化器状态…'
-                elif any(name == 'set_purifier_fan_level' for name in tool_names):
-                    tip = '正在设置风扇等级…'
-                elif any(name == 'set_purifier_mode' for name in tool_names):
-                    tip = '正在设置工作模式…'
-                elif any(name == 'set_purifier_led' for name in tool_names):
-                    tip = '正在设置LED亮度…'
-                else:
-                    tip = '正在处理您的请求…'
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': tip,
-                }
-            elif isinstance(message, ToolMessage):
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': '已获取设备数据，正在整理结果…',
-                }
-
-        yield self.get_agent_response(config)
+        
+        # 直接调用invoke，不使用stream
+        result = self.graph.invoke(inputs, config)
+        
+        return self.get_agent_response(config)
 
     def _extract_text_from_message(self, msg: AIMessage | ToolMessage | Any) -> str:
         try:

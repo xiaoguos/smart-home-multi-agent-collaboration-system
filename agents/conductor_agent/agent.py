@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterable
 from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
@@ -81,14 +80,9 @@ class ConductorAgent:
         ''
         '始终以中文回复用户，提供清晰、友好的服务。'
         '如果用户的需求超出了你的能力范围，请礼貌地说明并提供相关建议。'
+        '消息返回请使用Markdown'
     )
 
-    FORMAT_INSTRUCTION = (
-        '如果用户需要提供更多信息来完成请求，请将响应状态设置为 input_required。'
-        '如果在处理请求时出现错误，请将响应状态设置为 error。'
-        '如果请求已完成，请将响应状态设置为 completed。'
-    )
-    
     def __init__(self):
         self.model = ChatOpenAI(
                 model='deepseek-chat',
@@ -115,51 +109,15 @@ class ConductorAgent:
             prompt=self.SYSTEM_PROMPT,
         )
 
-    async def stream(self, query, context_id) -> AsyncIterable[dict[str, Any]]:
+    async def invoke(self, query, context_id) -> dict[str, Any]:
+        """非流式调用，直接返回最终结果"""
         inputs = {'messages': [('user', query)]}
         config = {'configurable': {'thread_id': context_id}}
-
-        for item in self.graph.stream(inputs, config, stream_mode='values'):
-            message = item['messages'][-1]
-            if (
-                isinstance(message, AIMessage)
-                and message.tool_calls
-                and len(message.tool_calls) > 0
-            ):
-                tool_names = [tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', '') for tc in message.tool_calls]
-                if any(name == 'list_available_agents' for name in tool_names):
-                    tip = '正在获取可用代理列表…'
-                elif any(name == 'get_agent_status' for name in tool_names):
-                    tip = '正在检查代理状态…'
-                elif any(name == 'execute_agent_command' for name in tool_names):
-                    tip = '正在向代理发送命令…'
-                elif any(name == 'control_device' for name in tool_names):
-                    tip = '正在控制智能设备…'
-                elif any(name == 'get_system_overview' for name in tool_names):
-                    tip = '正在获取系统概览…'
-                elif any(name == 'analyze_user_behavior' for name in tool_names):
-                    tip = '正在分析用户行为数据…'
-                elif any(name == 'get_user_insights' for name in tool_names):
-                    tip = '正在生成用户洞察…'
-                elif any(name == 'query_data_mining_agent' for name in tool_names):
-                    tip = '正在分析场景并挖掘使用习惯…'
-                elif any(name == 'get_xiaomi_devices' for name in tool_names):
-                    tip = '正在获取小米设备信息…'
-                else:
-                    tip = '正在处理您的请求…'
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': tip,
-                }
-            elif isinstance(message, ToolMessage):
-                yield {
-                    'is_task_complete': False,
-                    'require_user_input': False,
-                    'content': '已获取系统数据，正在整理结果…',
-                }
-
-        yield self.get_agent_response(config)
+        
+        # 直接调用invoke，不使用stream
+        result = self.graph.invoke(inputs, config)
+        
+        return self.get_agent_response(config)
 
     def _extract_text_from_message(self, msg: AIMessage | ToolMessage | Any) -> str:
         try:

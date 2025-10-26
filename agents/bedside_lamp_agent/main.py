@@ -32,7 +32,7 @@ def main(host, port):
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,
-            streaming=True,
+            streaming=False,
         )
         skill = AgentSkill(
             id="control_bedside_lamp",

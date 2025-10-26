@@ -46,51 +46,42 @@ class ConductorAgentExecutor(AgentExecutor):
             await event_queue.enqueue_event(task)
         updater = TaskUpdater(event_queue, task.id, task.context_id)
         try:
-            async for item in self.agent.stream(query, task.context_id):
-                is_task_complete = item['is_task_complete']
-                require_user_input = item['require_user_input']
-
-                if not is_task_complete and not require_user_input:
-                    await updater.update_status(
-                        TaskState.working,
-                        new_agent_text_message(
-                            item['content'],
-                            task.context_id,
-                            task.id,
-                        ),
-                    )
-                elif require_user_input:
-                    await updater.update_status(
-                        TaskState.input_required,
-                        new_agent_text_message(
-                            item['content'],
-                            task.context_id,
-                            task.id,
-                        ),
-                        final=True,
-                    )
-                    break
-                else:
-                    await updater.add_artifact(
-                        [Part(root=TextPart(text=item['content']))],
-                        name='conductor_result',
-                    )
-                    await updater.complete()
-                    break
+            # 使用非流式invoke方法
+            result = await self.agent.invoke(query, task.context_id)
+            
+            is_task_complete = result.get('is_task_complete', True)
+            require_user_input = result.get('require_user_input', False)
+            content = result.get('content', '处理完成')
+            
+            if require_user_input:
+                await updater.update_status(
+                    TaskState.input_required,
+                    new_agent_text_message(
+                        content,
+                        task.context_id,
+                        task.id,
+                    ),
+                    final=True,
+                )
+            elif is_task_complete:
+                await updater.add_artifact(
+                    [Part(root=TextPart(text=content))],
+                    name='conductor_result',
+                )
+                await updater.complete()
             else:
-                # 如果没有内容，可以添加默认响应
-                default_response = "智能家居管理系统已接收您的请求，正在处理中..."
+                # 如果既不需要输入也未完成，设置为working状态
                 await updater.update_status(
                     TaskState.working,
                     new_agent_text_message(
-                        default_response,
+                        content,
                         task.context_id,
                         task.id,
                     ),
                 )
 
         except Exception as e:
-            logger.error(f'An error occurred while streaming the response: {e}')
+            logger.error(f'An error occurred while processing the request: {e}')
             raise ServerError(error=InternalError()) from e
 
     def _validate_request(self, context: RequestContext) -> bool:

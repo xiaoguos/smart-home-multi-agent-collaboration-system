@@ -93,7 +93,7 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             
             # 创建客户端配置
             config = ClientConfig(
-                streaming=True,
+                streaming=False,
                 polling=False,
                 httpx_client=httpx_client,
                 supported_transports=["JSONRPC", "http_json"],
@@ -117,17 +117,43 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             # 发送消息并收集响应
             logger.info("开始发送消息并等待响应...")
             responses = []
+            final_content = ""
+            
             async for response in client.send_message(message):
                 logger.info(f"收到响应: {type(response)}")
+                
+                # 提取实际的文本内容
+                if hasattr(response, 'artifacts') and response.artifacts:
+                    # 从artifacts中提取文本内容
+                    for artifact in response.artifacts:
+                        if hasattr(artifact, 'parts'):
+                            for part in artifact.parts:
+                                if hasattr(part, 'root') and hasattr(part.root, 'text'):
+                                    final_content = part.root.text
+                                elif hasattr(part, 'text'):
+                                    final_content = part.text
+                
+                # 如果没有artifacts，尝试从message中提取
+                if not final_content and hasattr(response, 'message'):
+                    msg = response.message
+                    if hasattr(msg, 'parts') and msg.parts:
+                        for part in msg.parts:
+                            if hasattr(part, 'text'):
+                                final_content = part.text
+                            elif hasattr(part, 'root') and hasattr(part.root, 'text'):
+                                final_content = part.root.text
+                
+                # 保留原始响应用于调试
                 if hasattr(response, 'model_dump'):
                     responses.append(response.model_dump(mode='json', exclude_none=True))
                 else:
                     responses.append(str(response))
             
-            logger.info(f"成功收集 {len(responses)} 个响应")
+            logger.info(f"成功收集 {len(responses)} 个响应，提取的文本内容长度: {len(final_content)}")
             return {
                 "success": True,
-                "responses": responses,
+                "content": final_content,  # 只返回文本内容
+                "responses": responses,  # 保留完整响应用于调试
                 "agent_url": agent_url,
                 "command": command
             }
@@ -209,14 +235,13 @@ def execute_agent_command(agent_id: str, command: str):
         
         if result.get("success"):
             logger.info(f"成功调用 {agent_config['name']}")
-            return json.dumps({
-                "message": f"成功调用 {agent_config['name']}",
-                "agent_id": agent_id,
-                "agent_name": agent_config["name"],
-                "command": command,
-                "status": "success",
-                "responses": result.get("responses", [])
-            }, indent=2, ensure_ascii=False)
+            # 直接返回agent的内容，而不是包装在JSON中
+            content = result.get("content", "")
+            if content:
+                return content
+            else:
+                # 如果没有提取到content，返回一个简单的成功消息
+                return f"成功调用 {agent_config['name']}，命令: {command}"
         else:
             logger.error(f"调用 {agent_config['name']} 失败: {result.get('error')}")
             return json.dumps({
@@ -305,16 +330,13 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         success = result.get("success", False)
         if success:
             logger.info(f"成功控制 {agent_config['name']}")
-            return json.dumps({
-                "message": f"成功控制 {agent_config['name']}",
-                "device_type": device_type,
-                "device_name": agent_config["name"],
-                "action": action,
-                "parameters": parameters,
-                "command": command,
-                "status": "success",
-                "responses": result.get("responses", [])
-            }, indent=2, ensure_ascii=False)
+            # 直接返回agent的内容
+            content = result.get("content", "")
+            if content:
+                return content
+            else:
+                # 如果没有提取到content，返回一个简单的成功消息
+                return f"成功控制 {agent_config['name']}：{action}"
         else:
             logger.error(f"控制 {agent_config['name']} 失败: {result.get('error')}")
             return json.dumps({
@@ -483,13 +505,12 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
         
         if result.get("success"):
             logger.info("数据挖掘代理调用成功")
-            return json.dumps({
-                "message": "数据挖掘分析完成",
-                "query": query,
-                "user_id": user_id,
-                "status": "success",
-                "responses": result.get("responses", [])
-            }, indent=2, ensure_ascii=False)
+            # 直接返回数据挖掘agent的内容
+            content = result.get("content", "")
+            if content:
+                return content
+            else:
+                return f"数据挖掘分析完成，查询: {query}"
         else:
             logger.error(f"数据挖掘代理调用失败: {result.get('error')}")
             return json.dumps({

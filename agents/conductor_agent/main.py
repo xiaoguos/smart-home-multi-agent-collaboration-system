@@ -33,7 +33,7 @@ def main(host, port, debug_mode):
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,
-            streaming=True,
+            streaming=False,
         )
         skill = AgentSkill(
             id="smart_home_management",
