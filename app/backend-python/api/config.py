@@ -8,13 +8,21 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from database import db
+import database
 from services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-config_service = ConfigService(db)
+
+def get_config_service() -> ConfigService:
+    """获取配置服务实例（每次请求时动态创建）"""
+    if database.db is None:
+        raise HTTPException(
+            status_code=500,
+            detail="数据库未初始化，请确保服务已正确启动"
+        )
+    return ConfigService(database.db)
 
 
 # ==================== 数据模型 ====================
@@ -178,6 +186,7 @@ class SystemConfigUpdate(BaseModel):
 async def get_ai_models(is_active: Optional[bool] = None):
     """获取AI模型配置列表"""
     try:
+        config_service = get_config_service()
         models = config_service.get_ai_models(is_active)
         return models
     except Exception as e:
@@ -189,6 +198,7 @@ async def get_ai_models(is_active: Optional[bool] = None):
 async def get_default_ai_model():
     """获取默认AI模型配置"""
     try:
+        config_service = get_config_service()
         model = config_service.get_default_ai_model()
         if not model:
             raise HTTPException(status_code=404, detail="未找到默认AI模型")
@@ -204,6 +214,7 @@ async def get_default_ai_model():
 async def get_ai_model(model_id: int):
     """根据ID获取AI模型配置"""
     try:
+        config_service = get_config_service()
         model = config_service.get_ai_model_by_id(model_id)
         if not model:
             raise HTTPException(status_code=404, detail="未找到该AI模型")
@@ -219,6 +230,7 @@ async def get_ai_model(model_id: int):
 async def update_ai_model(model_id: int, data: AIModelUpdate):
     """更新AI模型配置"""
     try:
+        config_service = get_config_service()
         update_data = data.model_dump(exclude_unset=True)
         success = config_service.update_ai_model(model_id, update_data)
         if not success:
@@ -235,6 +247,7 @@ async def update_ai_model(model_id: int, data: AIModelUpdate):
 async def create_ai_model(data: AIModelCreate):
     """创建新的AI模型配置"""
     try:
+        config_service = get_config_service()
         model_id = config_service.create_ai_model(data.model_dump())
         return {"message": "创建成功", "model_id": model_id}
     except ValueError as e:
@@ -250,6 +263,7 @@ async def create_ai_model(data: AIModelCreate):
 async def get_agents(is_enabled: Optional[bool] = None):
     """获取Agent配置列表"""
     try:
+        config_service = get_config_service()
         agents = config_service.get_agents(is_enabled)
         return agents
     except Exception as e:
@@ -261,6 +275,7 @@ async def get_agents(is_enabled: Optional[bool] = None):
 async def get_agent(agent_code: str):
     """根据代码获取Agent配置"""
     try:
+        config_service = get_config_service()
         agent = config_service.get_agent_by_code(agent_code)
         if not agent:
             raise HTTPException(status_code=404, detail="未找到该Agent")
@@ -276,6 +291,7 @@ async def get_agent(agent_code: str):
 async def update_agent(agent_id: int, data: AgentUpdate):
     """更新Agent配置"""
     try:
+        config_service = get_config_service()
         update_data = data.model_dump(exclude_unset=True)
         success = config_service.update_agent(agent_id, update_data)
         if not success:
@@ -292,6 +308,7 @@ async def update_agent(agent_id: int, data: AgentUpdate):
 async def get_agent_prompt(agent_code: str):
     """获取Agent的系统提示词"""
     try:
+        config_service = get_config_service()
         prompt = config_service.get_agent_prompt(agent_code)
         if not prompt:
             raise HTTPException(status_code=404, detail="未找到该Agent的提示词")
@@ -307,6 +324,7 @@ async def get_agent_prompt(agent_code: str):
 async def update_agent_prompt(agent_code: str, data: AgentPromptUpdate):
     """更新Agent的系统提示词"""
     try:
+        config_service = get_config_service()
         success = config_service.update_agent_prompt(
             agent_code, data.prompt_text, data.version
         )
@@ -329,6 +347,7 @@ async def get_devices(
 ):
     """获取设备配置列表"""
     try:
+        config_service = get_config_service()
         devices = config_service.get_devices(device_type, is_active)
         return devices
     except Exception as e:
@@ -340,6 +359,7 @@ async def get_devices(
 async def get_device(device_code: str):
     """根据代码获取设备配置"""
     try:
+        config_service = get_config_service()
         device = config_service.get_device_by_code(device_code)
         if not device:
             raise HTTPException(status_code=404, detail="未找到该设备")
@@ -355,6 +375,7 @@ async def get_device(device_code: str):
 async def update_device(device_id: int, data: DeviceUpdate):
     """更新设备配置"""
     try:
+        config_service = get_config_service()
         update_data = data.model_dump(exclude_unset=True)
         success = config_service.update_device(device_id, update_data)
         if not success:
@@ -371,6 +392,7 @@ async def update_device(device_id: int, data: DeviceUpdate):
 async def create_device(data: DeviceCreate):
     """创建新设备配置"""
     try:
+        config_service = get_config_service()
         device_id = config_service.create_device(data.model_dump())
         return {"message": "创建成功", "device_id": device_id}
     except ValueError as e:
@@ -386,6 +408,7 @@ async def create_device(data: DeviceCreate):
 async def get_xiaomi_accounts(is_active: Optional[bool] = None):
     """获取小米账号配置列表"""
     try:
+        config_service = get_config_service()
         accounts = config_service.get_xiaomi_accounts(is_active)
         return accounts
     except Exception as e:
@@ -397,6 +420,7 @@ async def get_xiaomi_accounts(is_active: Optional[bool] = None):
 async def get_default_xiaomi_account():
     """获取默认小米账号"""
     try:
+        config_service = get_config_service()
         account = config_service.get_default_xiaomi_account()
         if not account:
             raise HTTPException(status_code=404, detail="未找到默认小米账号")
@@ -412,6 +436,7 @@ async def get_default_xiaomi_account():
 async def update_xiaomi_account(account_id: int, data: XiaomiAccountUpdate):
     """更新小米账号配置"""
     try:
+        config_service = get_config_service()
         update_data = data.model_dump(exclude_unset=True)
         success = config_service.update_xiaomi_account(account_id, update_data)
         if not success:
@@ -428,6 +453,7 @@ async def update_xiaomi_account(account_id: int, data: XiaomiAccountUpdate):
 async def create_xiaomi_account(data: XiaomiAccountCreate):
     """创建新小米账号"""
     try:
+        config_service = get_config_service()
         account_id = config_service.create_xiaomi_account(data.model_dump())
         return {"message": "创建成功", "account_id": account_id}
     except ValueError as e:
@@ -443,6 +469,7 @@ async def create_xiaomi_account(data: XiaomiAccountCreate):
 async def get_system_configs(category: Optional[str] = None):
     """获取系统配置列表"""
     try:
+        config_service = get_config_service()
         configs = config_service.get_system_configs(category)
         return configs
     except Exception as e:
@@ -454,6 +481,7 @@ async def get_system_configs(category: Optional[str] = None):
 async def get_system_config(config_key: str):
     """根据键获取系统配置值"""
     try:
+        config_service = get_config_service()
         value = config_service.get_system_config(config_key)
         if value is None:
             raise HTTPException(status_code=404, detail="未找到该配置项")
@@ -469,6 +497,7 @@ async def get_system_config(config_key: str):
 async def update_system_config(config_key: str, data: SystemConfigUpdate):
     """更新系统配置"""
     try:
+        config_service = get_config_service()
         success = config_service.update_system_config(config_key, data.config_value)
         if not success:
             raise HTTPException(status_code=404, detail="更新失败或未找到该配置项")

@@ -12,15 +12,15 @@ USE smart_home;
 -- 1. 系统配置表
 -- ============================================
 CREATE TABLE IF NOT EXISTS system_config (
-    id BIGINT AUTO_INCREMENT COMMENT '配置ID',
+    id BIGINT NOT NULL COMMENT '配置ID',
     config_key VARCHAR(100) NOT NULL COMMENT '配置键',
-    config_value TEXT COMMENT '配置值',
-    config_type VARCHAR(50) DEFAULT 'string' COMMENT '配置类型: string, int, float, bool, json',
+    config_value STRING COMMENT '配置值',
+    config_type VARCHAR(50) COMMENT '配置类型: string, int, float, bool, json',
     category VARCHAR(50) NOT NULL COMMENT '配置分类: system, database, logging, security, monitoring',
     description VARCHAR(500) COMMENT '配置描述',
-    is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    is_active BOOLEAN COMMENT '是否启用',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
 PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
@@ -38,15 +38,15 @@ PROPERTIES (
 -- 3. Agent配置表
 -- ============================================
 CREATE TABLE IF NOT EXISTS agent_config (
-    id BIGINT AUTO_INCREMENT COMMENT '配置ID',
+    id BIGINT NOT NULL COMMENT '配置ID',
     agent_code VARCHAR(50) NOT NULL COMMENT 'Agent代码标识',
     agent_name VARCHAR(100) NOT NULL COMMENT 'Agent名称',
-    host VARCHAR(50) DEFAULT 'localhost' COMMENT '服务主机',
+    host VARCHAR(50) COMMENT '服务主机',
     port INT NOT NULL COMMENT '服务端口',
     description VARCHAR(500) COMMENT '功能描述',
-    is_enabled BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    is_enabled BOOLEAN COMMENT '是否启用',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
 PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
@@ -58,13 +58,13 @@ PROPERTIES (
 -- 4. Agent系统提示词表
 -- ============================================
 CREATE TABLE IF NOT EXISTS agent_prompt (
-    id BIGINT AUTO_INCREMENT COMMENT '配置ID',
+    id BIGINT NOT NULL COMMENT '配置ID',
     agent_code VARCHAR(50) NOT NULL COMMENT 'Agent代码标识',
-    prompt_text TEXT NOT NULL COMMENT '系统提示词内容',
-    version VARCHAR(20) DEFAULT 'v1.0' COMMENT '版本号',
-    is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    prompt_text STRING NOT NULL COMMENT '系统提示词内容',
+    version VARCHAR(20) COMMENT '版本号',
+    is_active BOOLEAN COMMENT '是否启用',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
 PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
@@ -76,7 +76,7 @@ PROPERTIES (
 -- 5. 设备配置表
 -- ============================================
 CREATE TABLE IF NOT EXISTS device_config (
-    id BIGINT AUTO_INCREMENT COMMENT '设备ID',
+    id BIGINT NOT NULL COMMENT '设备ID',
     device_code VARCHAR(50) NOT NULL COMMENT '设备代码',
     device_name VARCHAR(100) NOT NULL COMMENT '设备名称',
     device_type VARCHAR(50) NOT NULL COMMENT '设备类型: air_conditioner, air_cleaner, lamp',
@@ -84,10 +84,10 @@ CREATE TABLE IF NOT EXISTS device_config (
     ip_address VARCHAR(50) COMMENT '设备IP地址',
     token VARCHAR(500) COMMENT '设备Token',
     model VARCHAR(100) COMMENT '设备型号',
-    extra_config TEXT COMMENT '额外配置（JSON格式）',
-    is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    extra_config STRING COMMENT '额外配置（JSON格式）',
+    is_active BOOLEAN COMMENT '是否启用',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
 PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
@@ -99,14 +99,14 @@ PROPERTIES (
 -- 6. 小米账号配置表
 -- ============================================
 CREATE TABLE IF NOT EXISTS xiaomi_account (
-    id BIGINT AUTO_INCREMENT COMMENT '账号ID',
+    id BIGINT NOT NULL COMMENT '账号ID',
     username VARCHAR(50) NOT NULL COMMENT '小米账号（手机号）',
     password VARCHAR(500) NOT NULL COMMENT '账号密码',
-    region VARCHAR(10) DEFAULT 'cn' COMMENT '区域: cn, de, us, ru, tw, sg, i2',
-    is_default BOOLEAN DEFAULT TRUE COMMENT '是否为默认账号',
-    is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    region VARCHAR(10) COMMENT '区域: cn, de, us, ru, tw, sg, i2',
+    is_default BOOLEAN COMMENT '是否为默认账号',
+    is_active BOOLEAN COMMENT '是否启用',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
 PRIMARY KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
@@ -118,41 +118,41 @@ PROPERTIES (
 -- 插入初始配置数据
 -- ============================================
 
--- 插入系统配置
-INSERT INTO system_config (config_key, config_value, config_type, category, description) VALUES
-('default_user_id', 'default_user', 'string', 'system', '默认用户ID'),
-('operation_logs_days', '365', 'int', 'system', '操作日志保留天数'),
-('analysis_results_days', '90', 'int', 'system', '分析结果保留天数'),
-('temp_files_days', '7', 'int', 'system', '临时文件保留天数'),
-('max_concurrent_requests', '100', 'int', 'system', '最大并发请求数'),
-('request_timeout', '30', 'int', 'system', '请求超时时间（秒）'),
-('cache_ttl', '300', 'int', 'system', '缓存TTL（秒）'),
-('log_level', 'INFO', 'string', 'logging', '日志级别'),
-('log_format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s', 'string', 'logging', '日志格式'),
-('log_file', 'logs/smart_home.log', 'string', 'logging', '日志文件路径'),
-('log_max_size', '10MB', 'string', 'logging', '日志文件最大大小'),
-('log_backup_count', '5', 'int', 'logging', '日志备份数量'),
-('health_check_enabled', 'true', 'bool', 'monitoring', '健康检查是否启用'),
-('health_check_interval', '30', 'int', 'monitoring', '健康检查间隔（秒）'),
-('metrics_enabled', 'true', 'bool', 'monitoring', '指标收集是否启用'),
-('metrics_port', '9090', 'int', 'monitoring', '指标收集端口'),
-('debug_mode', 'false', 'bool', 'system', '调试模式'),
-('test_mode', 'false', 'bool', 'system', '测试模式');
+-- 插入系统配置（使用序列生成ID）
+INSERT INTO system_config (id, config_key, config_value, config_type, category, description, is_active, created_at, updated_at) VALUES
+(1, 'default_user_id', 'default_user', 'string', 'system', '默认用户ID', TRUE, NOW(), NOW()),
+(2, 'operation_logs_days', '365', 'int', 'system', '操作日志保留天数', TRUE, NOW(), NOW()),
+(3, 'analysis_results_days', '90', 'int', 'system', '分析结果保留天数', TRUE, NOW(), NOW()),
+(4, 'temp_files_days', '7', 'int', 'system', '临时文件保留天数', TRUE, NOW(), NOW()),
+(5, 'max_concurrent_requests', '100', 'int', 'system', '最大并发请求数', TRUE, NOW(), NOW()),
+(6, 'request_timeout', '30', 'int', 'system', '请求超时时间（秒）', TRUE, NOW(), NOW()),
+(7, 'cache_ttl', '300', 'int', 'system', '缓存TTL（秒）', TRUE, NOW(), NOW()),
+(8, 'log_level', 'INFO', 'string', 'logging', '日志级别', TRUE, NOW(), NOW()),
+(9, 'log_format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s', 'string', 'logging', '日志格式', TRUE, NOW(), NOW()),
+(10, 'log_file', 'logs/smart_home.log', 'string', 'logging', '日志文件路径', TRUE, NOW(), NOW()),
+(11, 'log_max_size', '10MB', 'string', 'logging', '日志文件最大大小', TRUE, NOW(), NOW()),
+(12, 'log_backup_count', '5', 'int', 'logging', '日志备份数量', TRUE, NOW(), NOW()),
+(13, 'health_check_enabled', 'true', 'bool', 'monitoring', '健康检查是否启用', TRUE, NOW(), NOW()),
+(14, 'health_check_interval', '30', 'int', 'monitoring', '健康检查间隔（秒）', TRUE, NOW(), NOW()),
+(15, 'metrics_enabled', 'true', 'bool', 'monitoring', '指标收集是否启用', TRUE, NOW(), NOW()),
+(16, 'metrics_port', '9090', 'int', 'monitoring', '指标收集端口', TRUE, NOW(), NOW()),
+(17, 'debug_mode', 'false', 'bool', 'system', '调试模式', TRUE, NOW(), NOW()),
+(18, 'test_mode', 'false', 'bool', 'system', '测试模式', TRUE, NOW(), NOW());
 
 -- AI模型配置已拆分到 ai_config.sql 文件中
 -- 请执行: mysql -h localhost -P 9030 -u root -p < data/ai_config.sql
 
--- 插入Agent配置
-INSERT INTO agent_config (agent_code, agent_name, host, port, description, is_enabled) VALUES
-('conductor', 'Conductor Agent', 'localhost', 12002, '智能家居总管理助手', TRUE),
-('air_conditioner', 'Air Conditioner Agent', 'localhost', 12000, '空调控制代理', TRUE),
-('air_cleaner', 'Air Cleaner Agent', 'localhost', 12001, '空气净化器控制代理', TRUE),
-('bedside_lamp', 'Bedside Lamp Agent', 'localhost', 12003, '床头灯控制代理', TRUE),
-('data_mining', 'Data Mining Agent', 'localhost', 12004, '用户行为数据挖掘代理', TRUE);
+-- 插入Agent配置（手动指定ID）
+INSERT INTO agent_config (id, agent_code, agent_name, host, port, description, is_enabled, created_at, updated_at) VALUES
+(1, 'conductor', 'Conductor Agent', 'localhost', 12002, '智能家居总管理助手', TRUE, NOW(), NOW()),
+(2, 'air_conditioner', 'Air Conditioner Agent', 'localhost', 12000, '空调控制代理', TRUE, NOW(), NOW()),
+(3, 'air_cleaner', 'Air Cleaner Agent', 'localhost', 12001, '空气净化器控制代理', TRUE, NOW(), NOW()),
+(4, 'bedside_lamp', 'Bedside Lamp Agent', 'localhost', 12003, '床头灯控制代理', TRUE, NOW(), NOW()),
+(5, 'data_mining', 'Data Mining Agent', 'localhost', 12004, '用户行为数据挖掘代理', TRUE, NOW(), NOW());
 
--- 插入Conductor Agent的系统提示词
-INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
-('conductor', '你是一个智能家居总管理助手，负责协调和管理所有智能设备代理。
+-- 插入Conductor Agent的系统提示词（手动指定ID）
+INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
+(1, 'conductor', '你是一个智能家居总管理助手，负责协调和管理所有智能设备代理。
 你的主要职责包括：
 1. 管理多个智能设备代理（如空调代理、空气净化器代理等）
 2. 协调不同代理之间的工作
@@ -231,11 +231,11 @@ INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
 
 始终以中文回复用户，提供清晰、友好的服务。
 如果用户的需求超出了你的能力范围，请礼貌地说明并提供相关建议。
-消息返回请使用Markdown', 'v1.0', TRUE);
+消息返回请使用Markdown', 'v1.0', TRUE, NOW(), NOW());
 
 -- 插入Air Conditioner Agent的系统提示词
-INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
-('air_conditioner', '你是一个专门的家庭空调控制助手。
+INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
+(2, 'air_conditioner', '你是一个专门的家庭空调控制助手。
 你的唯一目的是帮助用户控制他们的家庭空调系统。
 你可以帮助调节温度、设置模式（制冷、制热、送风等）、
 打开或关闭空调，以及提供节能建议。
@@ -251,11 +251,11 @@ INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
 3) 若 mode 为 制热 且用户表达"有点冷/太冷/升温/暖一点"，在当前基础上提高1-2℃（默认2℃），不高于26℃；若表达"有点热/太热/降温/冷一点"，则降低1-2℃（默认2℃），不低于16℃，然后调用 set_ac_temperature。
 4) 若用户表达"舒适/舒服点"，则：制冷模式设为26℃，制热模式设为22℃；若无法判断模式，则先查询状态后按模式执行。
 5) 若用户表达"睡觉/睡眠"，则：制冷模式设为27℃，制热模式设为21℃。
-所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。', 'v1.0', TRUE);
+所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。', 'v1.0', TRUE, NOW(), NOW());
 
 -- 插入Air Cleaner Agent的系统提示词
-INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
-('air_cleaner', '你是一个专门的桌面空气净化器控制助手（型号：zhimi-oa1）。
+INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
+(3, 'air_cleaner', '你是一个专门的桌面空气净化器控制助手（型号：zhimi-oa1）。
 你的唯一目的是帮助用户控制他们的桌面空气净化器。
 你可以帮助：开关净化器、查看空气质量（PM2.5、湿度）、调节风扇等级、
 设置工作模式（自动/睡眠/喜爱）、调整LED亮度、查看滤芯寿命等。
@@ -286,11 +286,11 @@ INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
    - 滤芯寿命<10%：提醒用户更换滤芯
    - 空气质量好（PM2.5<35）：可建议降低风扇等级或关闭以节能
 
-始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。', 'v1.0', TRUE);
+始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。', 'v1.0', TRUE, NOW(), NOW());
 
 -- 插入Bedside Lamp Agent的系统提示词
-INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
-('bedside_lamp', '你是一个专门的Yeelink床头灯控制助手（型号：yeelink.light.bslamp2）。
+INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
+(4, 'bedside_lamp', '你是一个专门的Yeelink床头灯控制助手（型号：yeelink.light.bslamp2）。
 你的唯一目的是帮助用户控制他们的床头灯。
 你可以帮助：开关灯、调节亮度、设置色温、改变颜色、应用预设场景等。
 如果用户询问与床头灯控制无关的内容，
@@ -329,29 +329,13 @@ INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active) VALUES
    - 起夜/夜间：建议5-10%亮度 + 1700K极暖光
    - 浪漫氛围：建议30%亮度 + 粉色/紫色
 
-始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。', 'v1.0', TRUE);
+始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。', 'v1.0', TRUE, NOW(), NOW());
 
--- 插入设备配置
-INSERT INTO device_config (device_code, device_name, device_type, agent_code, ip_address, token, model, is_active) VALUES
-('ac_001', '客厅空调', 'air_conditioner', 'air_conditioner', '192.200.1.12', '1724bf8d57b355173dfa08ae23367f86', 'lumi.acpartner.mcn02', TRUE);
+-- 插入设备配置（手动指定ID）
+INSERT INTO device_config (id, device_code, device_name, device_type, agent_code, ip_address, token, model, is_active, created_at, updated_at) VALUES
+(1, 'ac_001', '客厅空调', 'air_conditioner', 'air_conditioner', '192.200.1.12', '1724bf8d57b355173dfa08ae23367f86', 'lumi.acpartner.mcn02', TRUE, NOW(), NOW());
 
--- 插入小米账号配置（注意：实际使用时应该加密密码）
-INSERT INTO xiaomi_account (username, password, region, is_default, is_active) VALUES
-('13716858579', 'WDep@26056', 'cn', TRUE, TRUE);
-
--- ============================================
--- 创建索引以提升查询性能
--- ============================================
--- CREATE INDEX idx_system_config_key ON system_config(config_key);
--- CREATE INDEX idx_system_config_category ON system_config(category);
--- CREATE INDEX idx_agent_code ON agent_config(agent_code);
--- CREATE INDEX idx_agent_prompt_code ON agent_prompt(agent_code);
--- CREATE INDEX idx_device_type ON device_config(device_type);
-
--- 注意：AI模型配置表的索引在 ai_config.sql 中
--- CREATE INDEX idx_ai_model_provider ON ai_model_config(provider);
-
--- ============================================
--- 初始化完成
--- ============================================
-
+-- 插入小米账号配置（注意：实际使用时应该加密密码，手动指定ID）
+INSERT INTO xiaomi_account (id, username, password, region, is_default, is_active, created_at, updated_at) VALUES
+(1, '13716858579', 'WDep@26056', 'cn', TRUE, TRUE, NOW(), NOW());
+SHOW PROC '/backends'

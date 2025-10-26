@@ -57,7 +57,8 @@ def get_lamp_status():
     except Exception as e:
         logger.error(f"获取床头灯状态失败: {e}")
         error_status = {
-            "error": str(e),
+            "error": f"获取设备状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }
@@ -87,7 +88,8 @@ def set_lamp_power(power: bool):
     except Exception as e:
         logger.error(f"设置床头灯电源失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置电源状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }, indent=2, ensure_ascii=False)
@@ -113,7 +115,8 @@ def set_lamp_brightness(brightness: int):
     except Exception as e:
         logger.error(f"设置床头灯亮度失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置亮度失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }, indent=2, ensure_ascii=False)
@@ -141,7 +144,8 @@ def set_lamp_color_temp(color_temp: int):
     except Exception as e:
         logger.error(f"设置床头灯色温失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置色温失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }, indent=2, ensure_ascii=False)
@@ -173,7 +177,8 @@ def set_lamp_color(red: int, green: int, blue: int):
     except Exception as e:
         logger.error(f"设置床头灯颜色失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置颜色失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }, indent=2, ensure_ascii=False)
@@ -226,7 +231,8 @@ def set_lamp_scene(scene: str):
     except Exception as e:
         logger.error(f"设置床头灯场景失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置场景失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
             "online": False,
             "model": LAMP_MODEL
         }, indent=2, ensure_ascii=False)

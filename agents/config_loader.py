@@ -14,15 +14,26 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+class DatabaseConnectionError(Exception):
+    """数据库连接错误"""
+    pass
+
+
+class ConfigLoadError(Exception):
+    """配置加载错误"""
+    pass
+
+
 class AgentConfigLoader:
     """Agent配置加载器类"""
     
-    def __init__(self, config_path: str = "../../config.yaml"):
+    def __init__(self, config_path: str = "../../config.yaml", strict_mode: bool = True):
         """
         初始化配置加载器
         
         Args:
             config_path: YAML配置文件路径（相对于Agent目录）
+            strict_mode: 严格模式，如果为True则数据库连接失败时抛出异常
         """
         # 获取当前文件所在目录的上级目录（agents目录）的上级目录（项目根目录）
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,6 +42,8 @@ class AgentConfigLoader:
         
         self.config = self._load_yaml_config(yaml_path)
         self.db_config = self.config.get('database', {}).get('starrocks', {})
+        self.strict_mode = strict_mode
+        self._connection_tested = False
     
     def _load_yaml_config(self, config_path: str) -> dict:
         """加载YAML配置文件"""
@@ -51,11 +64,16 @@ class AgentConfigLoader:
                 password=self.db_config.get('password', ''),
                 database=self.db_config.get('database', 'smart_home'),
                 charset=self.db_config.get('charset', 'utf8mb4'),
-                cursorclass=DictCursor
+                cursorclass=DictCursor,
+                connect_timeout=5  # 5秒连接超时
             )
+            self._connection_tested = True
             return connection
         except Exception as e:
-            logger.error(f"数据库连接失败: {e}")
+            error_msg = f"数据库连接失败: {e}"
+            logger.error(error_msg)
+            if self.strict_mode:
+                raise DatabaseConnectionError(error_msg) from e
             raise
     
     def get_default_ai_model_config(self) -> Optional[Dict[str, Any]]:
@@ -82,6 +100,7 @@ class AgentConfigLoader:
             conn.close()
             
             if result:
+                logger.info(f"成功从数据库加载AI模型配置: {result['model_name']}")
                 return {
                     'model': result['model_name'],
                     'api_key': result['api_key'],
@@ -90,10 +109,18 @@ class AgentConfigLoader:
                     'max_tokens': result['max_tokens']
                 }
             else:
-                logger.warning("未找到默认AI模型配置，使用默认值")
+                error_msg = "数据库中未找到默认AI模型配置"
+                logger.error(error_msg)
+                if self.strict_mode:
+                    raise ConfigLoadError(error_msg)
                 return None
+        except (DatabaseConnectionError, ConfigLoadError):
+            raise
         except Exception as e:
-            logger.error(f"获取AI模型配置失败: {e}")
+            error_msg = f"获取AI模型配置失败: {e}"
+            logger.error(error_msg)
+            if self.strict_mode:
+                raise ConfigLoadError(error_msg) from e
             return None
     
     def get_agent_config(self, agent_code: str) -> Optional[Dict[str, Any]]:
@@ -136,6 +163,9 @@ class AgentConfigLoader:
             
         Returns:
             系统提示词文本
+            
+        Raises:
+            ConfigLoadError: 严格模式下配置加载失败时抛出
         """
         try:
             conn = self._get_db_connection()
@@ -155,12 +185,21 @@ class AgentConfigLoader:
             conn.close()
             
             if result:
+                logger.info(f"成功从数据库加载 {agent_code} 的系统提示词")
                 return result['prompt_text']
             else:
-                logger.warning(f"未找到 {agent_code} 的系统提示词")
+                error_msg = f"数据库中未找到 {agent_code} 的系统提示词"
+                logger.error(error_msg)
+                if self.strict_mode:
+                    raise ConfigLoadError(error_msg)
                 return None
+        except (DatabaseConnectionError, ConfigLoadError):
+            raise
         except Exception as e:
-            logger.error(f"获取Agent提示词失败: {e}")
+            error_msg = f"获取Agent提示词失败: {e}"
+            logger.error(error_msg)
+            if self.strict_mode:
+                raise ConfigLoadError(error_msg) from e
             return None
     
     def get_device_config(self, device_code: str) -> Optional[Dict[str, Any]]:
@@ -228,10 +267,15 @@ class AgentConfigLoader:
 _config_loader = None
 
 
-def get_config_loader() -> AgentConfigLoader:
-    """获取全局配置加载器实例"""
+def get_config_loader(strict_mode: bool = True) -> AgentConfigLoader:
+    """
+    获取全局配置加载器实例
+    
+    Args:
+        strict_mode: 严格模式，如果为True则数据库连接失败时抛出异常
+    """
     global _config_loader
     if _config_loader is None:
-        _config_loader = AgentConfigLoader()
+        _config_loader = AgentConfigLoader(strict_mode=strict_mode)
     return _config_loader
 

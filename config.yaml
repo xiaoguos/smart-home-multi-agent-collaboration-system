@@ -5,10 +5,10 @@ database:
   
   # StarRocks 连接配置
   starrocks:
-    host: "localhost"
+    host: "192.168.110.130"
     port: 9030
     user: "root"
-    password: "password"
+    password: "123456"
     database: "smart_home"
     charset: "utf8mb4"
     

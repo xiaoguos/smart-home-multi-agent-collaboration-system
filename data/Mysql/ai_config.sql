@@ -1,11 +1,11 @@
 -- ============================================
 -- Moss AI 智能家居系统 - AI模型配置脚本
--- 数据库: StarRocks
+-- 数据库: MySQL
 -- 用途: 创建 AI 模型配置表并插入默认配置
 -- ============================================
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS smart_home;
+CREATE DATABASE IF NOT EXISTS smart_home CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE smart_home;
 
 -- ============================================
@@ -18,18 +18,17 @@ CREATE TABLE IF NOT EXISTS ai_model_config (
     api_key VARCHAR(500) NOT NULL COMMENT 'API密钥',
     api_base VARCHAR(200) NOT NULL COMMENT 'API基础URL',
     model_type VARCHAR(50) DEFAULT 'chat' COMMENT '模型类型: chat, embedding, search',
-    temperature DECIMAL(3,2) DEFAULT 0.7 COMMENT '温度参数',
+    temperature DOUBLE DEFAULT 0.7 COMMENT '温度参数',
     max_tokens INT DEFAULT 2048 COMMENT '最大token数',
     is_default BOOLEAN DEFAULT FALSE COMMENT '是否为默认模型',
     is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
-) ENGINE=OLAP
-PRIMARY KEY(id)
-DISTRIBUTED BY HASH(id) BUCKETS 10
-PROPERTIES (
-    "replication_num" = "1"
-);
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_model_name (model_name),
+    KEY idx_provider (provider),
+    KEY idx_default_active (is_default, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型配置表';
 
 -- 清空现有的 AI 模型配置（可选，重新初始化时使用）
 -- DELETE FROM ai_model_config;
@@ -44,20 +43,14 @@ INSERT INTO ai_model_config (
     provider, 
     api_key, 
     api_base, 
-    model_type, 
     temperature, 
-    max_tokens, 
-    is_default, 
-    is_active
+    is_default
 ) VALUES (
     'deepseek-chat',
     'deepseek',
     'sk-0f603ccc4af94854ac560c59f223b1d5',
     'https://api.deepseek.com',
-    'chat',
-    0,
-    2048,
-    TRUE,
+    0.0,
     TRUE
 );
 
@@ -67,21 +60,13 @@ INSERT INTO ai_model_config (
     model_name, 
     provider, 
     api_key, 
-    api_base, 
-    model_type, 
-    temperature, 
-    max_tokens, 
-    is_default, 
+    api_base,
     is_active
 ) VALUES (
     'gpt-3.5-turbo',
     'openai',
     'your-openai-api-key',
     'https://api.openai.com/v1',
-    'chat',
-    0.7,
-    2048,
-    FALSE,
     FALSE
 );
 
@@ -91,30 +76,21 @@ INSERT INTO ai_model_config (
     model_name, 
     provider, 
     api_key, 
-    api_base, 
-    model_type, 
-    temperature, 
-    max_tokens, 
-    is_default, 
+    api_base,
+    max_tokens,
     is_active
 ) VALUES (
     'gpt-4',
     'openai',
     'your-openai-api-key',
     'https://api.openai.com/v1',
-    'chat',
-    0.7,
     4096,
-    FALSE,
     FALSE
 );
 
 -- ============================================
--- 创建索引以提升查询性能（可选）
+-- 索引已在建表时创建
 -- ============================================
--- CREATE INDEX idx_ai_model_provider ON ai_model_config(provider);
--- CREATE INDEX idx_ai_model_name ON ai_model_config(model_name);
--- CREATE INDEX idx_ai_model_default ON ai_model_config(is_default, is_active);
 
 -- ============================================
 -- AI 模型配置说明
@@ -139,7 +115,7 @@ INSERT INTO ai_model_config (
 -- 
 -- 1. 首次使用：
 --    执行此脚本插入默认 AI 模型配置
---    mysql -h localhost -P 9030 -u root -p < data/ai_config.sql
+--    mysql -h localhost -P 3306 -u root -p < data/Mysql/ai_config.sql
 -- 
 -- 2. 修改 API Key：
 --    UPDATE ai_model_config 

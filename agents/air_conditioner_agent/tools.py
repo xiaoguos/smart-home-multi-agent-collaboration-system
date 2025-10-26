@@ -2,9 +2,17 @@ from langchain_core.tools import tool
 from miio import AirConditioningCompanionMcn02
 import json
 from pydantic import BaseModel, Field
+import logging
 
+# 配置日志
+logger = logging.getLogger(__name__)
 
-device = AirConditioningCompanionMcn02(ip="192.168.110.126", token="1724bf8d57b355173dfa08ae23367f86")
+# 设备配置
+AC_IP = "192.168.110.131"
+AC_TOKEN = "1724bf8d57b355173dfa08ae23367f86"
+AC_MODEL = "lumi.acpartner.mcn02"
+
+device = AirConditioningCompanionMcn02(ip=AC_IP, token=AC_TOKEN)
 
 
 @tool("get_ac_status", description="获取空调当前状态")
@@ -20,16 +28,18 @@ def get_ac_status():
             "vertical_swing": props[4],
             "load_power": props[5],
             "online": True,
-            "model": "lumi.acpartner.mcn02"
+            "model": AC_MODEL
         }
-        return json.dumps(status, indent=2)
+        return json.dumps(status, indent=2, ensure_ascii=False)
     except Exception as e:
+        logger.error(f"获取空调状态失败: {e}")
         error_status = {
-            "error": str(e),
+            "error": f"获取设备状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=AC_IP),
             "online": False,
-            "model": "lumi.acpartner.mcn02"
+            "model": AC_MODEL
         }
-        return json.dumps(error_status, indent=2)
+        return json.dumps(error_status, indent=2, ensure_ascii=False)
 
 
 class PowerArgs(BaseModel):
@@ -41,17 +51,21 @@ def set_ac_power(power: bool):
     try:
         if power:
             device.on()
-            return json.dumps({"message": "成功开启"}, indent=2)
+            logger.info("空调已开启")
+            return json.dumps({"message": "空调已开启", "power": True}, indent=2, ensure_ascii=False)
         else:
             device.off()
-            return json.dumps({"message": "成功关闭"}, indent=2)
+            logger.info("空调已关闭")
+            return json.dumps({"message": "空调已关闭", "power": False}, indent=2, ensure_ascii=False)
     except Exception as e:
+        logger.error(f"设置空调电源失败: {e}")
         error_status = {
-            "error": str(e),
+            "error": f"设置电源状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=AC_IP),
             "online": False,
-            "model": "lumi.acpartner.mcn02"
+            "model": AC_MODEL
         }
-        return json.dumps(error_status, indent=2)
+        return json.dumps(error_status, indent=2, ensure_ascii=False)
 
 
 class TemperatureArgs(BaseModel):
@@ -64,15 +78,18 @@ def set_ac_temperature(temperature: int):
     try:
         # 对于 mcn02，目标温度字段为 tar_temp，对应的设置命令通常为 set_tar_temp
         result = device.send("set_tar_temp", [temperature])
+        logger.info(f"空调温度已设置为{temperature}℃")
         return json.dumps({
-            "message": "目标温度已更新",
+            "message": f"空调温度已设置为{temperature}℃",
             "target_temperature": temperature,
             "result": result
-        }, indent=2)
+        }, indent=2, ensure_ascii=False)
     except Exception as e:
+        logger.error(f"设置空调温度失败: {e}")
         error_status = {
-            "error": str(e),
+            "error": f"设置温度失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=AC_IP),
             "online": False,
-            "model": "lumi.acpartner.mcn02"
+            "model": AC_MODEL
         }
-        return json.dumps(error_status, indent=2)
+        return json.dumps(error_status, indent=2, ensure_ascii=False)

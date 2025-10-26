@@ -159,7 +159,8 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             }
             
     except Exception as e:
-        logger.error(f"调用 A2A agent 失败: {str(e)}", exc_info=True)
+        # 简化错误日志，不打印完整堆栈跟踪（避免误导用户）
+        logger.error(f"调用 A2A agent 失败: {str(e)}")
         return {
             "success": False,
             "error": str(e),
@@ -234,10 +235,31 @@ def execute_agent_command(agent_id: str, command: str):
         result = call_a2a_agent(agent_url, command)
         
         if result.get("success"):
-            logger.info(f"成功调用 {agent_config['name']}")
-            # 直接返回agent的内容，而不是包装在JSON中
             content = result.get("content", "")
+            
+            # 检查子agent返回的内容是否包含错误信息
             if content:
+                # 尝试解析为JSON，检查是否包含error字段
+                try:
+                    content_json = json.loads(content)
+                    if isinstance(content_json, dict) and "error" in content_json:
+                        # 子agent返回了错误，视为操作失败
+                        logger.error(f"{agent_config['name']} 操作失败: {content_json.get('error')}")
+                        return json.dumps({
+                            "message": f"{agent_config['name']} 操作失败",
+                            "agent_id": agent_id,
+                            "agent_name": agent_config["name"],
+                            "command": command,
+                            "status": "failed",
+                            "error": content_json.get("error"),
+                            "details": content_json.get("message", "")
+                        }, indent=2, ensure_ascii=False)
+                except (json.JSONDecodeError, ValueError):
+                    # 不是JSON格式，直接返回文本内容
+                    pass
+                
+                # 正常返回内容
+                logger.info(f"成功调用 {agent_config['name']}")
                 return content
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
@@ -254,7 +276,7 @@ def execute_agent_command(agent_id: str, command: str):
             }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.error(f"执行代理命令异常: {str(e)}", exc_info=True)
+        logger.error(f"执行代理命令异常: {str(e)}")
         return json.dumps({
             "error": str(e),
             "message": "执行代理命令失败"
@@ -329,10 +351,33 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         
         success = result.get("success", False)
         if success:
-            logger.info(f"成功控制 {agent_config['name']}")
-            # 直接返回agent的内容
             content = result.get("content", "")
+            
+            # 检查子agent返回的内容是否包含错误信息
             if content:
+                # 尝试解析为JSON，检查是否包含error字段
+                try:
+                    content_json = json.loads(content)
+                    if isinstance(content_json, dict) and "error" in content_json:
+                        # 子agent返回了错误，视为操作失败
+                        logger.error(f"{agent_config['name']} 操作失败: {content_json.get('error')}")
+                        return json.dumps({
+                            "message": f"{agent_config['name']} 操作失败",
+                            "device_type": device_type,
+                            "device_name": agent_config["name"],
+                            "action": action,
+                            "parameters": parameters,
+                            "command": command,
+                            "status": "failed",
+                            "error": content_json.get("error"),
+                            "details": content_json.get("message", "")
+                        }, indent=2, ensure_ascii=False)
+                except (json.JSONDecodeError, ValueError):
+                    # 不是JSON格式，直接返回文本内容
+                    pass
+                
+                # 正常返回内容
+                logger.info(f"成功控制 {agent_config['name']}")
                 return content
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
@@ -351,7 +396,7 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
             }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.error(f"设备控制异常: {str(e)}", exc_info=True)
+        logger.error(f"设备控制异常: {str(e)}")
         return json.dumps({
             "error": str(e),
             "message": "设备控制失败"
@@ -488,9 +533,11 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
     try:
         agent_config = REGISTERED_AGENTS.get("data_mining")
         if not agent_config:
+            logger.warning("⚠️  数据挖掘代理未配置")
             return json.dumps({
-                "error": "数据挖掘代理未配置",
-                "message": "请检查数据挖掘代理是否已启动"
+                "success": False,
+                "message": "⚠️  数据挖掘代理未配置（可选功能），建议使用通用建议",
+                "suggestion": "请启动数据挖掘代理以获取个性化建议，或继续使用通用最佳实践"
             }, indent=2, ensure_ascii=False)
         
         agent_url = agent_config["url"]
@@ -498,13 +545,13 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
         # 构建完整的查询
         full_query = f"{query} (用户ID: {user_id})"
         
-        logger.info(f"调用数据挖掘代理: query={full_query}")
+        logger.info(f"调用数据挖掘代理: query={query} (用户ID: {user_id})")
         
         # 调用数据挖掘代理
         result = call_a2a_agent(agent_url, full_query, timeout=90.0)
         
         if result.get("success"):
-            logger.info("数据挖掘代理调用成功")
+            logger.info("✅ 数据挖掘代理调用成功")
             # 直接返回数据挖掘agent的内容
             content = result.get("content", "")
             if content:
@@ -512,21 +559,40 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
             else:
                 return f"数据挖掘分析完成，查询: {query}"
         else:
-            logger.error(f"数据挖掘代理调用失败: {result.get('error')}")
-            return json.dumps({
-                "message": "数据挖掘分析失败",
-                "query": query,
-                "user_id": user_id,
-                "status": "failed",
-                "error": result.get("error"),
-                "suggestion": "可能是数据挖掘代理未启动或网络问题"
-            }, indent=2, ensure_ascii=False)
+            error_msg = result.get("error", "未知错误")
+            # 判断是否是连接错误（服务未启动）
+            if "connection" in error_msg.lower() or "503" in error_msg:
+                logger.warning(f"⚠️  数据挖掘代理服务未启动（端口{agent_url}），这是可选功能，不影响设备控制")
+                return json.dumps({
+                    "success": False,
+                    "message": "⚠️  暂无历史数据（数据挖掘代理未启动）",
+                    "note": "这是正常情况，数据挖掘是可选功能。您可以：",
+                    "suggestions": [
+                        "1. 继续使用设备，系统会使用通用最佳实践",
+                        "2. 启动数据挖掘代理以获取个性化建议（需要启动12003端口服务）",
+                        "3. 随着使用次数增多，系统会学习您的习惯"
+                    ],
+                    "query": query,
+                    "user_id": user_id
+                }, indent=2, ensure_ascii=False)
+            else:
+                logger.error(f"❌ 数据挖掘代理调用失败: {error_msg}")
+                return json.dumps({
+                    "success": False,
+                    "message": "数据挖掘分析失败",
+                    "query": query,
+                    "user_id": user_id,
+                    "error": error_msg,
+                    "suggestion": "将使用通用最佳实践作为建议"
+                }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.error(f"调用数据挖掘代理异常: {str(e)}", exc_info=True)
+        logger.warning(f"⚠️  调用数据挖掘代理异常: {str(e)}（不影响设备控制）")
         return json.dumps({
-            "error": str(e),
-            "message": "调用数据挖掘代理失败"
+            "success": False,
+            "message": "⚠️  暂无历史数据分析（数据挖掘服务不可用）",
+            "note": "将使用通用最佳实践作为建议",
+            "suggestion": "启动数据挖掘代理以获取个性化建议"
         }, indent=2, ensure_ascii=False)
 
 
@@ -638,7 +704,7 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
         }, ensure_ascii=False, indent=2)
         
     except Exception as e:
-        logger.error(f"获取设备信息异常: {str(e)}", exc_info=True)
+        logger.error(f"获取设备信息异常: {str(e)}")
         return json.dumps({
             "success": False,
             "message": f"获取设备信息异常: {str(e)}",
@@ -672,7 +738,7 @@ def get_xiaomi_devices(username: str, password: str, server: str = "cn", skip_lo
         # 直接调用获取函数，不使用 MCP
         return _get_xiaomi_devices_direct(username, password, server, skip_login)
     except Exception as e:
-        logger.error(f"获取小米设备信息失败: {str(e)}", exc_info=True)
+        logger.error(f"获取小米设备信息失败: {str(e)}")
         return json.dumps({
             "success": False,
             "message": f"获取设备信息失败: {str(e)}"
@@ -755,7 +821,7 @@ def search_baidu_ai(query: str):
             }, ensure_ascii=False, indent=2)
             
     except Exception as e:
-        logger.error(f"百度AI搜索异常: {str(e)}", exc_info=True)
+        logger.error(f"百度AI搜索异常: {str(e)}")
         # 异常情况下也提供智能建议
         suggestions = _get_smart_suggestions(query)
         return json.dumps({
@@ -763,8 +829,7 @@ def search_baidu_ai(query: str):
             "query": query,
             "source": "智能建议系统（保底方案）",
             "suggestions": suggestions,
-            "note": "基于通用最佳实践的建议",
-            "error_detail": str(e)
+            "note": "基于通用最佳实践的建议"
         }, ensure_ascii=False, indent=2)
 
 

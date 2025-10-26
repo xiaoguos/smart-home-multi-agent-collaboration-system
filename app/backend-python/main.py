@@ -4,6 +4,7 @@ FastAPI 后端服务 - Moss AI 智能家居系统
 """
 
 import logging
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from api.chat import router as chat_router
 from config import settings
+from database import init_database, DatabaseConnectionError
 
 # 配置日志
 logging.basicConfig(
@@ -26,6 +28,24 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Moss AI 后端服务启动中...")
     logger.info(f"📍 Conductor Agent URL: {settings.CONDUCTOR_AGENT_URL}")
     logger.info(f"🔧 环境: {settings.ENVIRONMENT}")
+    
+    # 初始化数据库连接（严格模式：连接失败则退出）
+    try:
+        init_database(strict_mode=True)
+        logger.info("✅ 数据库初始化成功")
+    except DatabaseConnectionError as e:
+        logger.error(f"❌ 数据库初始化失败: {e}")
+        logger.error("⚠️  请确保:")
+        logger.error("   1. StarRocks 数据库已启动")
+        logger.error("   2. 已执行数据库初始化脚本: data/init_config.sql 和 data/ai_config.sql")
+        logger.error("   3. config.yaml 中的数据库连接配置正确")
+        logger.error("⚠️  服务启动失败，进程即将退出...")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"❌ 未知错误: {e}")
+        logger.error("⚠️  服务启动失败，进程即将退出...")
+        sys.exit(1)
+    
     yield
     logger.info("👋 Moss AI 后端服务关闭")
 
