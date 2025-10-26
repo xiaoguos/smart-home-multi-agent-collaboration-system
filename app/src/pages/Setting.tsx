@@ -8,13 +8,12 @@ import {
   Switch,
   InputNumber,
   message,
-  Spin,
   Table,
   Modal,
   Space,
 } from "antd";
 import React, { useState, useEffect } from "react";
-import { EditOutlined, SaveOutlined, PlusOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import "./style/setting.sass";
 import {
   getAIModels,
@@ -35,8 +34,13 @@ import {
 } from "../api/config";
 
 const Setting: React.FC = () => {
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("1");
+  
+  // 各表格的loading状态
+  const [aiModelLoading, setAiModelLoading] = useState(false);
+  const [xiaomiLoading, setXiaomiLoading] = useState(false);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [deviceLoading, setDeviceLoading] = useState(false);
 
   // AI模型配置状态
   const [aiModels, setAiModels] = useState<AIModel[]>([]);
@@ -69,49 +73,49 @@ const Setting: React.FC = () => {
 
   const loadAIModels = async () => {
     try {
-      setLoading(true);
+      setAiModelLoading(true);
       const data = await getAIModels();
       setAiModels(data);
     } catch (error: any) {
       message.error(`加载AI模型配置失败: ${error.message}`);
     } finally {
-      setLoading(false);
+      setAiModelLoading(false);
     }
   };
 
   const loadXiaomiAccounts = async () => {
     try {
-      setLoading(true);
+      setXiaomiLoading(true);
       const data = await getXiaomiAccounts();
       setXiaomiAccounts(data);
     } catch (error: any) {
       message.error(`加载小米账号配置失败: ${error.message}`);
     } finally {
-      setLoading(false);
+      setXiaomiLoading(false);
     }
   };
 
   const loadAgents = async () => {
     try {
-      setLoading(true);
+      setAgentLoading(true);
       const data = await getAgents();
       setAgents(data);
     } catch (error: any) {
       message.error(`加载Agent配置失败: ${error.message}`);
     } finally {
-      setLoading(false);
+      setAgentLoading(false);
     }
   };
 
   const loadDevices = async () => {
     try {
-      setLoading(true);
+      setDeviceLoading(true);
       const data = await getDevices();
       setDevices(data);
     } catch (error: any) {
       message.error(`加载设备配置失败: ${error.message}`);
     } finally {
-      setLoading(false);
+      setDeviceLoading(false);
     }
   };
 
@@ -148,7 +152,6 @@ const Setting: React.FC = () => {
   const handleSaveAIModel = async () => {
     try {
       const values = await aiModelForm.validateFields();
-      setLoading(true);
 
       if (isCreatingAIModel) {
         await createAIModel(values);
@@ -162,8 +165,6 @@ const Setting: React.FC = () => {
       loadAIModels();
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -191,7 +192,6 @@ const Setting: React.FC = () => {
   const handleSaveXiaomi = async () => {
     try {
       const values = await xiaomiForm.validateFields();
-      setLoading(true);
 
       if (isCreatingXiaomi) {
         await createXiaomiAccount(values);
@@ -205,8 +205,6 @@ const Setting: React.FC = () => {
       loadXiaomiAccounts();
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -221,7 +219,6 @@ const Setting: React.FC = () => {
   const handleSaveAgent = async () => {
     try {
       const values = await agentForm.validateFields();
-      setLoading(true);
 
       if (selectedAgent) {
         await updateAgent(selectedAgent.id, values);
@@ -232,8 +229,6 @@ const Setting: React.FC = () => {
       loadAgents();
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -259,7 +254,6 @@ const Setting: React.FC = () => {
   const handleSaveDevice = async () => {
     try {
       const values = await deviceForm.validateFields();
-      setLoading(true);
 
       if (isCreatingDevice) {
         await createDevice(values);
@@ -273,8 +267,6 @@ const Setting: React.FC = () => {
       loadDevices();
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -396,7 +388,7 @@ const Setting: React.FC = () => {
             dataSource={aiModels}
             columns={aiModelColumns}
             rowKey="id"
-            loading={loading}
+            loading={aiModelLoading}
             pagination={false}
           />
         </Card>
@@ -416,7 +408,7 @@ const Setting: React.FC = () => {
             dataSource={xiaomiAccounts}
             columns={xiaomiColumns}
             rowKey="id"
-            loading={loading}
+            loading={xiaomiLoading}
             pagination={false}
           />
         </Card>
@@ -431,7 +423,7 @@ const Setting: React.FC = () => {
             dataSource={agents}
             columns={agentColumns}
             rowKey="id"
-            loading={loading}
+            loading={agentLoading}
             pagination={false}
           />
         </Card>
@@ -451,7 +443,7 @@ const Setting: React.FC = () => {
             dataSource={devices}
             columns={deviceColumns}
             rowKey="id"
-            loading={loading}
+            loading={deviceLoading}
             pagination={false}
           />
         </Card>
@@ -461,9 +453,7 @@ const Setting: React.FC = () => {
 
   return (
     <div className="setting-container">
-      <Spin spinning={loading}>
-        <Tabs activeKey={activeTab} items={tabItems} onChange={setActiveTab} />
-      </Spin>
+      <Tabs activeKey={activeTab} items={tabItems} onChange={setActiveTab} />
 
       {/* AI模型编辑模态框 */}
       <Modal
