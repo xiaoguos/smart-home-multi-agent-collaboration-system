@@ -5,6 +5,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 import logging
+import sys
+import os
+
+# 添加父目录到路径以导入config_loader
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config_loader import get_config_loader
 
 from tools import (
     list_available_agents,
@@ -15,7 +21,8 @@ from tools import (
     analyze_user_behavior,
     get_user_insights,
     query_data_mining_agent,
-    get_xiaomi_devices
+    get_xiaomi_devices,
+    search_baidu_ai
 )
 
 memory = MemorySaver()
@@ -25,7 +32,9 @@ logger = logging.getLogger(__name__)
 
 class ConductorAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    SYSTEM_PROMPT = (
+    
+    # 默认系统提示词（备用）
+    DEFAULT_SYSTEM_PROMPT = (
         '你是一个智能家居总管理助手，负责协调和管理所有智能设备代理。'
         '你的主要职责包括：'
         '1. 管理多个智能设备代理（如空调代理、空气净化器代理等）'
@@ -65,18 +74,43 @@ class ConductorAgent:
         ''
         '**场景智能分析（核心功能）**：'
         '当用户描述一个生活场景时（例如："我要睡觉了"、"起床了"、"要出门了"、"到家了"），'
-        '必须优先使用 query_data_mining_agent 工具：'
-        '1. 数据挖掘代理会自动识别用户描述的场景类型'
-        '2. 从StarRocks数据库挖掘该场景下的历史使用习惯'
-        '3. 提供个性化的设备控制建议（如空调温度、床头灯亮度等）'
-        '4. 如果数据挖掘代理返回"暂无足够历史数据"，则可以使用默认设置或提示用户'
+        '或用户指令模糊时（例如："打开空调"但未指定温度），使用以下智能处理流程：'
         ''
-        '场景处理流程示例：'
+        '**智能处理流程（两级保底机制）**：'
+        '第一步：优先使用历史习惯数据'
+        '  1. 调用 query_data_mining_agent 工具，传入用户场景或指令'
+        '  2. 数据挖掘代理会从StarRocks数据库挖掘用户历史使用习惯'
+        '  3. 如果有足够的历史数据，返回个性化建议（如"您通常在睡觉时将空调设为26°C"）'
+        '  4. 根据个性化建议执行设备控制'
+        ''
+        '第二步：保底方案 - AI搜索通用最佳实践'
+        '  当数据挖掘代理返回以下情况时，启用保底方案：'
+        '  - 返回"暂无足够历史数据"'
+        '  - 返回"同一时间操作记录过少"'
+        '  - 用户是新用户，没有历史记录'
+        '  - 历史数据不足以提供有价值的建议'
+        '  '
+        '  启用保底方案步骤：'
+        '  1. 调用 search_baidu_ai 工具'
+        '  2. 传入智能查询，如："人类最适合的睡觉温度"、"睡觉时最适合的灯光设置"'
+        '  3. 获取基于人体工程学和通用最佳实践的建议'
+        '  4. 向用户说明："根据通用最佳实践，建议...（随着您使用次数增多，我会学习您的个人习惯）"'
+        '  5. 根据通用建议执行设备控制'
+        ''
+        '**完整场景示例**：'
         '用户说："我要睡觉了" → '
-        '  1. 调用 query_data_mining_agent，传入"我要睡觉了"'
-        '  2. 数据挖掘代理识别为"睡觉"场景'
-        '  3. 返回建议：关闭主灯、打开床头灯(亮度10%)、开启空调(25°C)、净化器睡眠模式'
-        '  4. 根据建议依次调用 control_device 执行设备控制'
+        '  情况A（有历史数据）：'
+        '    1. 调用 query_data_mining_agent("我要睡觉了")'
+        '    2. 返回："根据您的历史习惯，睡觉时空调26°C、床头灯10%亮度"'
+        '    3. 执行个性化设置'
+        '  '
+        '  情况B（无历史数据）：'
+        '    1. 调用 query_data_mining_agent("我要睡觉了")'
+        '    2. 返回："暂无足够历史数据"'
+        '    3. 调用 search_baidu_ai("人类最适合的睡觉温度和灯光设置")'
+        '    4. 返回："根据睡眠医学，建议26-28°C、极低亮度暖光"'
+        '    5. 向用户说明这是通用建议，并执行设置'
+        '    6. 提示："我会记住这次设置，下次为您提供更个性化的建议"'
         ''
         '始终以中文回复用户，提供清晰、友好的服务。'
         '如果用户的需求超出了你的能力范围，请礼貌地说明并提供相关建议。'
@@ -84,12 +118,37 @@ class ConductorAgent:
     )
 
     def __init__(self):
-        self.model = ChatOpenAI(
+        # 从数据库加载配置
+        config_loader = get_config_loader()
+        
+        # 加载AI模型配置
+        ai_config = config_loader.get_default_ai_model_config()
+        if ai_config:
+            logger.info(f"从数据库加载AI模型配置: {ai_config['model']}")
+            self.model = ChatOpenAI(
+                model=ai_config['model'],
+                openai_api_key=ai_config['api_key'],
+                openai_api_base=ai_config['api_base'],
+                temperature=ai_config['temperature'],
+            )
+        else:
+            logger.warning("使用默认AI模型配置")
+            self.model = ChatOpenAI(
                 model='deepseek-chat',
                 openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
                 openai_api_base='https://api.deepseek.com',
                 temperature=0,
             )
+        
+        # 加载系统提示词
+        system_prompt = config_loader.get_agent_prompt('conductor')
+        if system_prompt:
+            logger.info("从数据库加载Conductor系统提示词")
+            self.SYSTEM_PROMPT = system_prompt
+        else:
+            logger.warning("使用默认系统提示词")
+            self.SYSTEM_PROMPT = self.DEFAULT_SYSTEM_PROMPT
+        
         self.tools = [
             list_available_agents,
             execute_agent_command,
@@ -99,7 +158,8 @@ class ConductorAgent:
             analyze_user_behavior,
             get_user_insights,
             query_data_mining_agent,
-            get_xiaomi_devices
+            get_xiaomi_devices,
+            search_baidu_ai  # 百度AI搜索保底方案
         ]
 
         self.graph = create_react_agent(

@@ -5,6 +5,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 import logging
+import sys
+import os
+
+# 添加父目录到路径以导入config_loader
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config_loader import get_config_loader
 
 from tools import (
     get_purifier_status,
@@ -21,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 class AirPurifierAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    SYSTEM_PROMPT = (
+    
+    # 默认系统提示词（备用）
+    DEFAULT_SYSTEM_PROMPT = (
         '你是一个专门的桌面空气净化器控制助手（型号：zhimi-oa1）。'
         '你的唯一目的是帮助用户控制他们的桌面空气净化器。'
         '你可以帮助：开关净化器、查看空气质量（PM2.5、湿度）、调节风扇等级、'
@@ -57,12 +65,37 @@ class AirPurifierAgent:
     )
 
     def __init__(self):
-        self.model = ChatOpenAI(
+        # 从数据库加载配置
+        config_loader = get_config_loader()
+        
+        # 加载AI模型配置
+        ai_config = config_loader.get_default_ai_model_config()
+        if ai_config:
+            logger.info(f"从数据库加载AI模型配置: {ai_config['model']}")
+            self.model = ChatOpenAI(
+                model=ai_config['model'],
+                openai_api_key=ai_config['api_key'],
+                openai_api_base=ai_config['api_base'],
+                temperature=ai_config['temperature'],
+            )
+        else:
+            logger.warning("使用默认AI模型配置")
+            self.model = ChatOpenAI(
                 model='deepseek-chat',
                 openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
                 openai_api_base='https://api.deepseek.com',
                 temperature=0,
             )
+        
+        # 加载系统提示词
+        system_prompt = config_loader.get_agent_prompt('air_cleaner')
+        if system_prompt:
+            logger.info("从数据库加载Air Cleaner系统提示词")
+            self.SYSTEM_PROMPT = system_prompt
+        else:
+            logger.warning("使用默认系统提示词")
+            self.SYSTEM_PROMPT = self.DEFAULT_SYSTEM_PROMPT
+        
         self.tools = [
             get_purifier_status,
             set_purifier_power,

@@ -5,6 +5,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 import logging
+import sys
+import os
+
+# 添加父目录到路径以导入config_loader
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config_loader import get_config_loader
 
 from tools import (
     get_lamp_status,
@@ -23,7 +29,9 @@ logger = logging.getLogger(__name__)
 
 class BedsideLampAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    SYSTEM_PROMPT = (
+    
+    # 默认系统提示词（备用）
+    DEFAULT_SYSTEM_PROMPT = (
         '你是一个专门的Yeelink床头灯控制助手（型号：yeelink.light.bslamp2）。'
         '你的唯一目的是帮助用户控制他们的床头灯。'
         '你可以帮助：开关灯、调节亮度、设置色温、改变颜色、应用预设场景等。'
@@ -67,12 +75,37 @@ class BedsideLampAgent:
     )
 
     def __init__(self):
-        self.model = ChatOpenAI(
-            model='deepseek-chat',
-            openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
-            openai_api_base='https://api.deepseek.com',
-            temperature=0,
-        )
+        # 从数据库加载配置
+        config_loader = get_config_loader()
+        
+        # 加载AI模型配置
+        ai_config = config_loader.get_default_ai_model_config()
+        if ai_config:
+            logger.info(f"从数据库加载AI模型配置: {ai_config['model']}")
+            self.model = ChatOpenAI(
+                model=ai_config['model'],
+                openai_api_key=ai_config['api_key'],
+                openai_api_base=ai_config['api_base'],
+                temperature=ai_config['temperature'],
+            )
+        else:
+            logger.warning("使用默认AI模型配置")
+            self.model = ChatOpenAI(
+                model='deepseek-chat',
+                openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
+                openai_api_base='https://api.deepseek.com',
+                temperature=0,
+            )
+        
+        # 加载系统提示词
+        system_prompt = config_loader.get_agent_prompt('bedside_lamp')
+        if system_prompt:
+            logger.info("从数据库加载Bedside Lamp系统提示词")
+            self.SYSTEM_PROMPT = system_prompt
+        else:
+            logger.warning("使用默认系统提示词")
+            self.SYSTEM_PROMPT = self.DEFAULT_SYSTEM_PROMPT
+        
         self.tools = [
             get_lamp_status,
             set_lamp_power,

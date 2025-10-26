@@ -48,7 +48,9 @@ app.add_middleware(
 )
 
 # 注册路由
+from api.config import router as config_router
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
+app.include_router(config_router, prefix="/api/v1/config", tags=["Config"])
 
 
 @app.get("/")

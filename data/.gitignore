@@ -1,0 +1,12 @@
+# 忽略包含敏感信息的AI配置文件
+# 建议创建 ai_config.local.sql 用于本地开发
+ai_config.local.sql
+
+# 备份文件
+*.bak
+*.backup
+
+# 数据库导出文件
+*.dump
+*.sql.gz
+
