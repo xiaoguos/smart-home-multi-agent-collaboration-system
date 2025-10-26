@@ -10,7 +10,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 # 设备配置
-PURIFIER_IP = "192.168.110.123"
+PURIFIER_IP = "192.168.110.120"
 PURIFIER_TOKEN = "569905df67a11d6b67a575097255c798"
 PURIFIER_MODEL = "zhimi.airp.oa1"
 
@@ -24,39 +24,18 @@ device = MiotDevice(
 # 添加线程锁，确保同一时间只有一个操作
 device_lock = threading.Lock()
 
-def safe_call(func, *args, max_retries=3, delay=1.5):
+def safe_call(func, *args):
     """
-    安全调用设备方法，带重试机制
-    默认重试3次，每次间隔1.5秒
+    安全调用设备方法，不进行重试
+    如果失败，直接抛出异常
     """
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            if attempt > 0:
-                # 重试前先等待，让设备有时间恢复
-                logger.info(f"等待 {delay} 秒后进行第 {attempt + 1} 次尝试...")
-                time.sleep(delay)
-            
-            result = func(*args)
-            
-            # 成功后也稍微等待一下，避免连续请求
-            if attempt > 0:
-                logger.info(f"第 {attempt + 1} 次尝试成功")
-            time.sleep(0.2)
-            return result
-            
-        except Exception as e:
-            last_error = e
-            error_msg = str(e)
-            logger.warning(f"操作失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}")
-            
-            if attempt < max_retries - 1:
-                continue
-            else:
-                logger.error(f"所有 {max_retries} 次重试都失败了")
-                raise last_error
-    
-    return None
+    try:
+        result = func(*args)
+        time.sleep(0.2)  # 稍微等待一下，避免连续请求
+        return result
+    except Exception as e:
+        logger.error(f"操作失败: {e}")
+        raise e
 
 
 @tool("get_purifier_status", description="获取空气净化器当前状态，包括电源、PM2.5、湿度、风扇等级、工作模式、滤芯寿命等信息")
@@ -94,7 +73,8 @@ def get_purifier_status():
     except Exception as e:
         logger.error(f"获取空气净化器状态失败: {e}")
         error_status = {
-            "error": str(e),
+            "error": f"获取设备状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
             "online": False,
             "model": PURIFIER_MODEL
         }
@@ -121,7 +101,8 @@ def set_purifier_power(power: bool):
     except Exception as e:
         logger.error(f"设置空气净化器电源失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置电源状态失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
             "online": False,
             "model": PURIFIER_MODEL
         }, indent=2, ensure_ascii=False)
@@ -147,7 +128,8 @@ def set_purifier_fan_level(level: int):
     except Exception as e:
         logger.error(f"设置空气净化器风扇等级失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置风扇等级失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
             "online": False,
             "model": PURIFIER_MODEL
         }, indent=2, ensure_ascii=False)
@@ -173,7 +155,8 @@ def set_purifier_mode(mode: int):
     except Exception as e:
         logger.error(f"设置空气净化器工作模式失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置工作模式失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
             "online": False,
             "model": PURIFIER_MODEL
         }, indent=2, ensure_ascii=False)
@@ -199,7 +182,8 @@ def set_purifier_led(brightness: int):
     except Exception as e:
         logger.error(f"设置空气净化器LED失败: {e}")
         return json.dumps({
-            "error": str(e),
+            "error": f"设置LED亮度失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
             "online": False,
             "model": PURIFIER_MODEL
         }, indent=2, ensure_ascii=False)

@@ -5,6 +5,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 import logging
+import sys
+import os
+
+# 添加父目录到路径以导入config_loader
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config_loader import get_config_loader
 
 from tools import get_ac_status, set_ac_power, set_ac_temperature
 
@@ -15,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 class AirConditionerAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    SYSTEM_PROMPT = (
+    
+    # 默认系统提示词（备用）
+    DEFAULT_SYSTEM_PROMPT = (
         '你是一个专门的家庭空调控制助手。'
         '你的唯一目的是帮助用户控制他们的家庭空调系统。'
         '你可以帮助调节温度、设置模式（制冷、制热、送风等）、'
@@ -36,12 +44,33 @@ class AirConditionerAgent:
     )
 
     def __init__(self):
-        self.model = ChatOpenAI(
-                model='deepseek-chat',
-                openai_api_key='sk-0f603ccc4af94854ac560c59f223b1d5',
-                openai_api_base='https://api.deepseek.com',
-                temperature=0,
+        # 从数据库加载配置（严格模式：配置加载失败则退出）
+        try:
+            config_loader = get_config_loader(strict_mode=True)
+            
+            # 加载AI模型配置
+            ai_config = config_loader.get_default_ai_model_config()
+            logger.info(f"✅ 成功加载AI模型配置: {ai_config['model']}")
+            self.model = ChatOpenAI(
+                model=ai_config['model'],
+                openai_api_key=ai_config['api_key'],
+                openai_api_base=ai_config['api_base'],
+                temperature=ai_config['temperature'],
             )
+            
+            # 加载系统提示词
+            system_prompt = config_loader.get_agent_prompt('air_conditioner')
+            logger.info("✅ 成功加载Air Conditioner系统提示词")
+            self.SYSTEM_PROMPT = system_prompt
+            
+        except Exception as e:
+            logger.error(f"❌ 配置加载失败: {e}")
+            logger.error("⚠️  请确保:")
+            logger.error("   1. StarRocks 数据库已启动")
+            logger.error("   2. 已执行数据库初始化脚本: data/init_config.sql 和 data/ai_config.sql")
+            logger.error("   3. config.yaml 中的数据库连接配置正确")
+            raise SystemExit(1) from e
+        
         self.tools = [get_ac_status,set_ac_power,set_ac_temperature]
 
         self.graph = create_react_agent(

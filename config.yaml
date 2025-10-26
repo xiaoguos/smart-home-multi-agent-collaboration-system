@@ -1,159 +1,24 @@
-# 智能家居代理系统配置文件
-# Smart Home Agent System Configuration
-
 # 数据库配置
 database:
-  # 数据库类型: sqlite, mysql, postgresql, starrocks
+  # 数据库类型
   type: "starrocks"
   
-  # StarRocks 配置
+  # StarRocks 连接配置
   starrocks:
-    host: "localhost"
+    host: "192.168.110.130"
     port: 9030
     user: "root"
-    password: "password"
+    password: "123456"
     database: "smart_home"
     charset: "utf8mb4"
+    
     # 连接池配置
     pool_size: 10
     max_overflow: 20
     pool_timeout: 30
     pool_recycle: 3600
-  
-  # SQLite 配置 (备用)
-  sqlite:
-    path: "user_behavior.db"
-  
-  # MySQL 配置 (备用)
-  mysql:
-    host: "localhost"
-    port: 3306
-    user: "root"
-    password: "password"
-    database: "smart_home"
-    charset: "utf8mb4"
 
-# 代理服务配置
-agents:
-  # 总管理代理
-  conductor:
-    name: "Conductor Agent"
-    host: "localhost"
-    port: 12002
-    description: "智能家居总管理助手"
-    enabled: true
-  
-  # 空调代理
-  air_conditioner:
-    name: "Air Conditioner Agent"
-    host: "localhost"
-    port: 12000
-    description: "空调控制代理"
-    enabled: true
-    # 设备配置
-    device:
-      ip: "192.200.1.12"
-      token: "1724bf8d57b355173dfa08ae23367f86"
-      model: "lumi.acpartner.mcn02"
-  
-  # 空气净化器代理
-  air_cleaner:
-    name: "Air Cleaner Agent"
-    host: "localhost"
-    port: 12001
-    description: "空气净化器控制代理"
-    enabled: true
-  
-  # 数据挖掘代理
-  data_mining:
-    name: "Data Mining Agent"
-    host: "localhost"
-    port: 12003
-    description: "用户行为数据挖掘代理"
-    enabled: true
-
-# AI模型配置
-ai:
-  # DeepSeek 配置
-  deepseek:
-    model: "deepseek-chat"
-    api_key: "sk-0f603ccc4af94854ac560c59f223b1d5"
-    api_base: "https://api.deepseek.com"
-    temperature: 0
-    max_tokens: 2048
-  
-  # OpenAI 配置 (备用)
-  openai:
-    model: "gpt-3.5-turbo"
-    api_key: "your-openai-api-key"
-    api_base: "https://api.openai.com/v1"
-    temperature: 0.7
-
-# 日志配置
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file: "logs/smart_home.log"
-  max_size: "10MB"
-  backup_count: 5
-
-# 系统配置
-system:
-  # 用户配置
-  default_user_id: "default_user"
-  
-  # 数据保留策略
-  data_retention:
-    operation_logs_days: 365
-    analysis_results_days: 90
-    temp_files_days: 7
-  
-  # 性能配置
-  performance:
-    max_concurrent_requests: 100
-    request_timeout: 30
-    cache_ttl: 300
-
-# 安全配置
-security:
-  # API密钥配置
-  api_keys:
-    enabled: false
-    required_for_agents: false
-  
-  # 访问控制
-  access_control:
-    allowed_ips: []
-    blocked_ips: []
-  
-  # 数据加密
-  encryption:
-    enabled: false
-    algorithm: "AES-256"
-
-# 监控配置
-monitoring:
-  # 健康检查
-  health_check:
-    enabled: true
-    interval: 30
-    timeout: 10
-  
-  # 指标收集
-  metrics:
-    enabled: true
-    port: 9090
-    path: "/metrics"
-  
-  # 告警配置
-  alerts:
-    enabled: false
-    email: "admin@example.com"
-    webhook: ""
-
-# 开发配置
+# 本地开发模式（可选）
 development:
   debug: false
-  hot_reload: false
-  mock_devices: false
   test_mode: false

@@ -47,9 +47,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout style={{ height: '100vh' }}>
+    <div className="app">
       <Header />
-      <Layout>
+      <Layout className="app-content">
         <Sider width={200} className="site-layout-background">
           <Menu
             mode="inline"
@@ -59,7 +59,7 @@ const App: React.FC = () => {
             onClick={handleSideMenuClick}
           />
         </Sider>
-        <Layout style={{ padding: '24px' }}>
+        <Layout>
           <Content
             className="site-layout-background"
           >
@@ -67,7 +67,7 @@ const App: React.FC = () => {
           </Content>
         </Layout>
       </Layout>
-    </Layout>
+    </div>
   );
 };
 
