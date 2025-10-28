@@ -34,7 +34,7 @@ export class HttpClient {
 
   constructor(config: HttpClientConfig = {}) {
     this.config = {
-      baseURL: import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:2100',
+      baseURL: import.meta.env.VITE_BACKEND_URL,
       timeout: 120000, // 120 秒超时
       headers: {
         'Content-Type': 'application/json',

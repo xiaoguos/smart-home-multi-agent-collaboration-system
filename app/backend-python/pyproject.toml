@@ -1,0 +1,28 @@
+[project]
+name = "moss-ai-backend"
+version = "1.0.0"
+description = "Moss AI 智能家居系统后端服务"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "httpx>=0.25.0",
+    "PyMySQL>=1.1.0",
+    "SQLAlchemy>=2.0.0",
+    "PyYAML>=6.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
