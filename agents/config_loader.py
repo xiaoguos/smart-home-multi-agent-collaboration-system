@@ -1,6 +1,7 @@
 """
 Agent配置加载器
-从StarRocks数据库中加载Agent配置和AI模型配置
+从 config.yaml 和 StarRocks 数据库中加载Agent配置和AI模型配置
+支持统一配置管理
 """
 
 import sys
@@ -10,6 +11,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 import logging
 from typing import Optional, Dict, Any
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -25,25 +27,47 @@ class ConfigLoadError(Exception):
 
 
 class AgentConfigLoader:
-    """Agent配置加载器类"""
+    """Agent配置加载器类 - 支持从 config.yaml 和数据库加载配置"""
     
-    def __init__(self, config_path: str = "../../config.yaml", strict_mode: bool = True):
+    def __init__(self, config_path: str = None, strict_mode: bool = True):
         """
         初始化配置加载器
         
         Args:
-            config_path: YAML配置文件路径（相对于Agent目录）
+            config_path: YAML配置文件路径，如果为None则自动查找
             strict_mode: 严格模式，如果为True则数据库连接失败时抛出异常
         """
-        # 获取当前文件所在目录的上级目录（agents目录）的上级目录（项目根目录）
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
-        yaml_path = os.path.join(project_root, "config.yaml")
+        # 自动查找 config.yaml
+        if config_path is None:
+            config_path = self._find_config_file()
         
-        self.config = self._load_yaml_config(yaml_path)
+        self.config = self._load_yaml_config(config_path)
         self.db_config = self.config.get('database', {}).get('starrocks', {})
+        self.agents_config = self.config.get('agents', {})
+        self.backend_config = self.config.get('backend', {})
+        self.logging_config = self.config.get('logging', {})
         self.strict_mode = strict_mode
         self._connection_tested = False
+    
+    def _find_config_file(self) -> str:
+        """自动查找 config.yaml 文件"""
+        # 1. 从当前文件所在目录向上查找
+        current_dir = Path(__file__).parent
+        
+        # 向上查找最多3层
+        for _ in range(3):
+            config_path = current_dir / "config.yaml"
+            if config_path.exists():
+                logger.info(f"找到配置文件: {config_path}")
+                return str(config_path)
+            current_dir = current_dir.parent
+        
+        # 2. 默认路径（项目根目录）
+        default_path = Path(__file__).parent.parent / "config.yaml"
+        if default_path.exists():
+            return str(default_path)
+        
+        raise FileNotFoundError("未找到 config.yaml 配置文件")
     
     def _load_yaml_config(self, config_path: str) -> dict:
         """加载YAML配置文件"""
@@ -261,6 +285,53 @@ class AgentConfigLoader:
         except Exception as e:
             logger.error(f"获取小米账号配置失败: {e}")
             return None
+    
+    # ==================== 新增：统一配置读取方法 ====================
+    
+    def get_agent_host_port(self, agent_name: str) -> tuple[str, int]:
+        """
+        从 config.yaml 获取 Agent 的 host 和 port
+        
+        Args:
+            agent_name: Agent 名称 (如 'conductor', 'air_conditioner')
+            
+        Returns:
+            (host, port) 元组
+        """
+        agent_cfg = self.agents_config.get(agent_name, {})
+        host = agent_cfg.get('host', 'localhost')
+        port = agent_cfg.get('port', 12000)
+        return host, port
+    
+    def get_backend_config_value(self, key: str, default: Any = None) -> Any:
+        """
+        获取后端配置值
+        
+        Args:
+            key: 配置键，支持点号分隔的路径 (如 'python.host')
+            default: 默认值
+            
+        Returns:
+            配置值
+        """
+        keys = key.split('.')
+        value = self.backend_config
+        
+        for k in keys:
+            if isinstance(value, dict):
+                value = value.get(k)
+            else:
+                return default
+        
+        return value if value is not None else default
+    
+    def get_logging_config(self) -> Dict[str, Any]:
+        """获取日志配置"""
+        return self.logging_config
+    
+    def get_all_agents_config(self) -> Dict[str, Dict[str, Any]]:
+        """获取所有 Agent 的配置"""
+        return self.agents_config
 
 
 # 全局配置加载器实例

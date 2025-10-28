@@ -24,12 +24,22 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option("--host", "host", default="localhost")
-@click.option("--port", "port", default=12000)
+@click.option("--host", "host", default=None, help="服务主机地址（默认从config.yaml读取）")
+@click.option("--port", "port", default=None, type=int, help="服务端口（默认从config.yaml读取）")
 @click.option("--debug", "debug_mode", is_flag=True, default=False, help="启用 debug 模式（兼容 PyCharm debugger）")
 def main(host, port, debug_mode):
     """Starts the Conductor Agent server."""
     try:
+        # 从配置文件读取 host 和 port（如果命令行未指定）
+        if host is None or port is None:
+            from config_loader import get_config_loader
+            config_loader = get_config_loader(strict_mode=False)
+            default_host, default_port = config_loader.get_agent_host_port('conductor')
+            host = host or default_host
+            port = port or default_port
+        
+        logger.info(f"📍 Conductor Agent 启动配置: {host}:{port}")
+        
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,

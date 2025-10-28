@@ -1,11 +1,15 @@
+# ========================================
+# Moss AI 智能家居系统 - 统一配置文件
+# ========================================
+
 # 数据库配置
 database:
-  # 数据库类型
+  # 数据库类型: starrocks / mysql / sqlite
   type: "starrocks"
   
   # StarRocks 连接配置
   starrocks:
-    host: "192.168.110.130"
+    host: "192.168.110.124"
     port: 9030
     user: "root"
     password: "123456"
@@ -18,7 +22,97 @@ database:
     pool_timeout: 30
     pool_recycle: 3600
 
-# 本地开发模式（可选）
+# Agent 服务配置
+agents:
+  # Conductor Agent - 总管理代理
+  conductor:
+    host: "localhost"
+    port: 12000
+    name: "Conductor Agent"
+    description: "智能家居总管理助手"
+    
+  # Air Conditioner Agent - 空调代理
+  air_conditioner:
+    host: "localhost"
+    port: 12001
+    name: "Air Conditioner Agent"
+    description: "空调控制代理"
+    
+  # Air Cleaner Agent - 空气净化器代理
+  air_cleaner:
+    host: "localhost"
+    port: 12002
+    name: "Air Cleaner Agent"
+    description: "空气净化器控制代理"
+    
+  # Data Mining Agent - 数据挖掘代理
+  data_mining:
+    host: "localhost"
+    port: 12003
+    name: "Data Mining Agent"
+    description: "数据挖掘与分析代理"
+    
+  # Bedside Lamp Agent - 床头灯代理
+  bedside_lamp:
+    host: "localhost"
+    port: 12004
+    name: "Bedside Lamp Agent"
+    description: "床头灯控制代理"
+
+# Backend 后端服务配置
+backend:
+  # FastAPI 后端配置
+  python:
+    host: "0.0.0.0"
+    port: 3000
+    debug: true
+    environment: "development"
+    
+    # Conductor Agent 连接配置
+    conductor_agent_url: "http://localhost:12000"
+    conductor_timeout: 120  # 秒
+    
+    # CORS 配置
+    cors_origins:
+      - "http://localhost:1420"   # Vite 前端
+      - "http://127.0.0.1:1420"
+      - "http://localhost:3000"
+      - "http://127.0.0.1:3000"
+      - "tauri://localhost"       # Tauri 应用
+  
+  # Cangjie 后端配置（可选）
+  cangjie:
+    host: "127.0.0.1"
+    port: 2100
+    enabled: false
+
+# 前端配置
+frontend:
+  # Vite 开发服务器
+  dev_server:
+    host: "localhost"
+    port: 1420
+    
+  # Tauri 应用配置
+  tauri:
+    enabled: true
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # 日志文件配置
+  file:
+    enabled: true
+    directory: "logs"
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+
+# 本地开发模式
 development:
   debug: false
   test_mode: false
+  
+  # 是否自动重启服务
+  auto_reload: false
