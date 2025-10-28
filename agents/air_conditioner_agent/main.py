@@ -24,11 +24,24 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option("--host", "host", default="localhost")
-@click.option("--port", "port", default=12001)
+@click.option("--host", "host", default=None, help="服务主机地址（默认从config.yaml读取）")
+@click.option("--port", "port", default=None, type=int, help="服务端口（默认从config.yaml读取）")
 def main(host, port):
-    """Starts the Currency Agent server."""
+    """Starts the Air Conditioner Agent server."""
     try:
+        # 从配置文件读取 host 和 port（如果命令行未指定）
+        if host is None or port is None:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from config_loader import get_config_loader
+            config_loader = get_config_loader(strict_mode=False)
+            default_host, default_port = config_loader.get_agent_host_port('air_conditioner')
+            host = host or default_host
+            port = port or default_port
+        
+        logger.info(f"📍 Air Conditioner Agent 启动配置: {host}:{port}")
+        
         capabilities = AgentCapabilities(
             push_notifications=False,
             state_transition_history=False,
