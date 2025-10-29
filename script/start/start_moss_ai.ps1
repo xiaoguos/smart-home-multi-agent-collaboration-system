@@ -279,11 +279,11 @@ function Start-AllServices {
     
     # 定义服务配置：Index, NameCN, NameEN, Directory, Command, PortKey, Delay
     $services = @(
-        @{Index=1; NameCN="后端服务"; NameEN="Backend Service"; Dir="app\backend-python"; Cmd="uv run ."; PortKey="BackendPort"; Delay=3},
-        @{Index=2; NameCN="总管理代理"; NameEN="Conductor Agent"; Dir="agents\conductor_agent"; Cmd="uv run ."; PortKey="ConductorPort"; Delay=3},
-        @{Index=3; NameCN="空调代理"; NameEN="Air Conditioner Agent"; Dir="agents\air_conditioner_agent"; Cmd="uv run ."; PortKey="AirCondPort"; Delay=2},
-        @{Index=4; NameCN="空气净化器代理"; NameEN="Air Cleaner Agent"; Dir="agents\air_cleaner_agent"; Cmd="uv run ."; PortKey="AirCleanPort"; Delay=2},
-        @{Index=5; NameCN="床头灯代理"; NameEN="Bedside Lamp Agent"; Dir="agents\bedside_lamp_agent"; Cmd="uv run ."; PortKey="BedsideLampPort"; Delay=2},
+        @{Index=1; NameCN="后端服务"; NameEN="Backend Service"; Dir="app\backend-python"; Cmd="python __main__.py"; PortKey="BackendPort"; Delay=3},
+        @{Index=2; NameCN="总管理代理"; NameEN="Conductor Agent"; Dir="agents\conductor_agent"; Cmd="python __main__.py"; PortKey="ConductorPort"; Delay=3},
+        @{Index=3; NameCN="空调代理"; NameEN="Air Conditioner Agent"; Dir="agents\air_conditioner_agent"; Cmd="python __main__.py"; PortKey="AirCondPort"; Delay=2},
+        @{Index=4; NameCN="空气净化器代理"; NameEN="Air Cleaner Agent"; Dir="agents\air_cleaner_agent"; Cmd="python __main__.py"; PortKey="AirCleanPort"; Delay=2},
+        @{Index=5; NameCN="床头灯代理"; NameEN="Bedside Lamp Agent"; Dir="agents\bedside_lamp_agent"; Cmd="python __main__.py"; PortKey="BedsideLampPort"; Delay=2},
         @{Index=6; NameCN="前端开发服务器"; NameEN="Frontend Dev Server"; Dir="app"; Cmd="pnpm dev"; PortKey="FrontendPort"; Delay=3}
     )
     

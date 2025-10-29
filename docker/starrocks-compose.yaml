@@ -15,7 +15,8 @@ services:
       - starrocks-fe-meta:/opt/starrocks/fe/meta
       - starrocks-fe-log:/opt/starrocks/fe/log
     networks:
-      - moss-ai-network
+      moss-ai-network:
+        ipv4_address: 192.168.100.2
     command: ["sh", "-c", "cd /opt/starrocks/fe && ./bin/start_fe.sh && sleep infinity"]
     restart: unless-stopped
     deploy:
@@ -31,13 +32,14 @@ services:
     hostname: starrocks-be
     environment:
       - FE_SERVERS=fe1:starrocks-fe:9010
-      - BE_ADDR=starrocks-be:9050
+      - BE_ADDR=192.168.100.20:9050
       - JAVA_OPTS=-Xmx1536m -XX:+UseG1GC
     volumes:
       - starrocks-be-storage:/opt/starrocks/be/storage
       - starrocks-be-log:/opt/starrocks/be/log
     networks:
-      - moss-ai-network
+      moss-ai-network:
+        ipv4_address: 192.168.100.4
     depends_on:
       - starrocks-fe
     command: ["sh", "-c", "cd /opt/starrocks/be && ./bin/start_be.sh && sleep infinity"]
@@ -55,13 +57,14 @@ services:
     hostname: starrocks-cn
     environment:
       - FE_SERVERS=fe1:starrocks-fe:9010
-      - CN_ADDR=starrocks-cn:9051
+      - CN_ADDR=192.168.100.30:9051
       - JAVA_OPTS=-Xmx1024m -XX:+UseG1GC
     volumes:
       - starrocks-cn-storage:/opt/starrocks/cn/storage
       - starrocks-cn-log:/opt/starrocks/cn/log
     networks:
-      - moss-ai-network
+      moss-ai-network:
+        ipv4_address: 192.168.100.3
     depends_on:
       - starrocks-fe
     command: ["sh", "-c", "cd /opt/starrocks/cn && ./bin/start_backend.sh --cn && sleep infinity"]

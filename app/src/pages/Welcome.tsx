@@ -29,6 +29,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { WECHAT_CONFIG, generateWechatLoginUrl, generateSceneId } from "@/config/wechat";
+import { login, register, saveUserInfo, isLoggedIn } from "../api/auth";
 import "./style/welcome.sass";
 
 const { Title, Paragraph } = Typography;
@@ -44,13 +45,70 @@ const Welcome: React.FC = () => {
   const [pollingInterval, setPollingInterval] = useState<number | null>(null);
 
   const handleStartChat = () => {
-    setShowLogin(true);
+    // 检查是否已登录
+    if (isLoggedIn()) {
+      navigate("/chat");
+    } else {
+      setShowLogin(true);
+    }
   };
 
-  const handleLogin = (values: any) => {
-    console.log("登录信息:", values);
-    // 这里可以添加登录逻辑
-    navigate("/chat");
+  const handleLogin = async (values: any) => {
+    try {
+      const response = await login({
+        username: values.username,
+        password: values.password,
+      });
+
+      if (response.success && response.token && response.user) {
+        message.success(response.message);
+        // 保存用户信息
+        saveUserInfo(response.token, response.user);
+        
+        // 检查是否绑定小米账号
+        if (!response.xiaomi_bound) {
+          message.warning("您还未绑定小米账号，请先绑定");
+          setTimeout(() => {
+            navigate("/xiaomi-binding");
+          }, 1500);
+        } else {
+          navigate("/chat");
+        }
+      } else {
+        message.error(response.message || "登录失败");
+      }
+    } catch (error: any) {
+      console.error("登录失败:", error);
+      message.error(error.message || "登录失败，请稍后重试");
+    }
+  };
+
+  // 处理注册
+  const handleRegister = async (values: any) => {
+    try {
+      const response = await register({
+        username: values.username,
+        password: values.password,
+        email: values.email,
+        nickname: values.nickname,
+      });
+
+      if (response.success && response.token && response.user) {
+        message.success("注册成功！");
+        // 保存用户信息
+        saveUserInfo(response.token, response.user);
+        // 注册后需要绑定小米账号
+        message.info("请绑定小米账号以使用智能家居功能");
+        setTimeout(() => {
+          navigate("/xiaomi-binding");
+        }, 1500);
+      } else {
+        message.error(response.message || "注册失败");
+      }
+    } catch (error: any) {
+      console.error("注册失败:", error);
+      message.error(error.message || "注册失败，请稍后重试");
+    }
   };
 
   // 生成微信二维码
@@ -120,7 +178,7 @@ const Welcome: React.FC = () => {
       }
     }, WECHAT_CONFIG.POLLING_INTERVAL);
 
-    setPollingInterval(interval);
+    setPollingInterval(interval as unknown as number | null);
   };
 
   // 处理微信登录
@@ -366,7 +424,7 @@ const Welcome: React.FC = () => {
                             >
                               <Input
                                 prefix={<UserOutlined />}
-                                placeholder="请输入用户名"
+                                placeholder="默认账号: admin / test"
                                 size="large"
                               />
                             </Form.Item>
@@ -379,7 +437,7 @@ const Welcome: React.FC = () => {
                             >
                               <Input.Password
                                 prefix={<LockOutlined />}
-                                placeholder="请输入密码"
+                                placeholder="admin123 / test123"
                                 size="large"
                               />
                             </Form.Item>
@@ -394,6 +452,82 @@ const Welcome: React.FC = () => {
                                 登录
                               </Button>
                             </Form.Item>
+                            <div style={{ textAlign: 'center', marginTop: 16 }}>
+                              <Button type="link" onClick={() => setLoginType("register")}>
+                                还没有账号？立即注册
+                              </Button>
+                            </div>
+                          </Form>
+                        ),
+                      },
+                      {
+                        key: "register",
+                        label: (
+                          <span>
+                            <UserOutlined />
+                            注册账号
+                          </span>
+                        ),
+                        children: (
+                          <Form
+                            name="register"
+                            onFinish={handleRegister}
+                            layout="vertical"
+                            className="login-form"
+                          >
+                            <Form.Item
+                              name="username"
+                              label="用户名"
+                              rules={[
+                                { required: true, message: "请输入用户名!" },
+                                { min: 3, message: "用户名至少3个字符!" },
+                              ]}
+                            >
+                              <Input
+                                prefix={<UserOutlined />}
+                                placeholder="请输入用户名（3-50字符）"
+                                size="large"
+                              />
+                            </Form.Item>
+                            <Form.Item
+                              name="password"
+                              label="密码"
+                              rules={[
+                                { required: true, message: "请输入密码!" },
+                                { min: 6, message: "密码至少6个字符!" },
+                              ]}
+                            >
+                              <Input.Password
+                                prefix={<LockOutlined />}
+                                placeholder="请输入密码（至少6个字符）"
+                                size="large"
+                              />
+                            </Form.Item>
+                            <Form.Item
+                              name="nickname"
+                              label="昵称（可选）"
+                            >
+                              <Input
+                                placeholder="请输入昵称"
+                                size="large"
+                              />
+                            </Form.Item>
+                            <Form.Item>
+                              <Button
+                                type="primary"
+                                htmlType="submit"
+                                size="large"
+                                className="login-button"
+                                block
+                              >
+                                注册
+                              </Button>
+                            </Form.Item>
+                            <div style={{ textAlign: 'center', marginTop: 16 }}>
+                              <Button type="link" onClick={() => setLoginType("password")}>
+                                已有账号？立即登录
+                              </Button>
+                            </div>
                           </Form>
                         ),
                       },

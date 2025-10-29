@@ -5,6 +5,8 @@ import Chat from "@/pages/Chat";
 import About from "@/pages/About";
 import Welcome from "@/pages/Welcome";
 import WechatCallback from "@/pages/WechatCallback";
+import XiaomiBinding from "@/pages/XiaomiBinding";
+import AccountSetting from "@/pages/AccountSetting";
 
 export const routes = createBrowserRouter([
   {
@@ -32,6 +34,14 @@ export const routes = createBrowserRouter([
         element: <Setting />,
       },
     ],
+  },
+  {
+    path: "/account-setting",
+    element: <AccountSetting />,
+  },
+  {
+    path: "/xiaomi-binding",
+    element: <XiaomiBinding />,
   },
   {
     path: "/auth/wechat/callback",

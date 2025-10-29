@@ -1,9 +1,11 @@
 import { Sender, Bubble } from "@ant-design/x";
 import { RobotOutlined, UserOutlined, CopyOutlined, ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Space } from "antd";
+import { App, Button, Space, Alert } from "antd";
 import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./style/chat.sass";
 import { sendChatMessage } from "../api/chat";
+import { checkBindingStatus } from "../api/xiaomi";
 
 const userAvatar: React.CSSProperties = {
   color: "#1890ff",
@@ -22,9 +24,12 @@ interface Message {
 }
 
 const Chat: React.FC = () => {
+  const navigate = useNavigate();
   const [value, setValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isBound, setIsBound] = useState<boolean>(true);
+  const [checkingBinding, setCheckingBinding] = useState<boolean>(true);
   const { message } = App.useApp();
   const contextId = React.useRef<string>(`session-${Date.now()}`);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -44,6 +49,33 @@ const Chat: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 检查小米账号绑定状态
+  useEffect(() => {
+    const checkBinding = async () => {
+      try {
+        // 从 localStorage 获取用户信息
+        const userStr = localStorage.getItem('user_info');
+        if (!userStr) {
+          setIsBound(false);
+          setCheckingBinding(false);
+          return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const response = await checkBindingStatus(user.id);
+        setIsBound(response.is_bound);
+      } catch (error) {
+        console.error("检查绑定状态失败:", error);
+        // 检查失败时假定已绑定，避免误报
+        setIsBound(true);
+      } finally {
+        setCheckingBinding(false);
+      }
+    };
+
+    checkBinding();
+  }, []);
 
   // 复制消息内容
   const copyMessage = async (content: string) => {
@@ -201,6 +233,24 @@ const Chat: React.FC = () => {
 
   return (
     <div className="chat-container">
+      {/* 小米账号绑定提示 */}
+      {!checkingBinding && !isBound && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <Alert
+            message="需要绑定小米账号"
+            description="要使用智能家居控制功能，请先绑定您的小米账号。"
+            type="warning"
+            showIcon
+            action={
+              <Button size="small" type="primary" onClick={() => navigate("/xiaomi-binding")}>
+                立即绑定
+              </Button>
+            }
+            closable
+          />
+        </div>
+      )}
+      
       <div className="chat-messages" ref={messagesContainerRef}>
         <Bubble.List
           autoScroll={true}

@@ -19,16 +19,12 @@ import {
   getAIModels,
   updateAIModel,
   createAIModel,
-  getXiaomiAccounts,
-  updateXiaomiAccount,
-  createXiaomiAccount,
   getAgents,
   updateAgent,
   getDevices,
   updateDevice,
   createDevice,
   type AIModel,
-  type XiaomiAccount,
   type Agent,
   type Device,
 } from "../api/config";
@@ -38,7 +34,6 @@ const Setting: React.FC = () => {
   
   // 各表格的loading状态
   const [aiModelLoading, setAiModelLoading] = useState(false);
-  const [xiaomiLoading, setXiaomiLoading] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
   const [deviceLoading, setDeviceLoading] = useState(false);
 
@@ -48,13 +43,6 @@ const Setting: React.FC = () => {
   const [aiModelForm] = Form.useForm();
   const [isAIModelModalVisible, setIsAIModelModalVisible] = useState(false);
   const [isCreatingAIModel, setIsCreatingAIModel] = useState(false);
-
-  // 小米账号配置状态
-  const [xiaomiAccounts, setXiaomiAccounts] = useState<XiaomiAccount[]>([]);
-  const [selectedXiaomiAccount, setSelectedXiaomiAccount] = useState<XiaomiAccount | null>(null);
-  const [xiaomiForm] = Form.useForm();
-  const [isXiaomiModalVisible, setIsXiaomiModalVisible] = useState(false);
-  const [isCreatingXiaomi, setIsCreatingXiaomi] = useState(false);
 
   // Agent配置状态
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -80,18 +68,6 @@ const Setting: React.FC = () => {
       message.error(`加载AI模型配置失败: ${error.message}`);
     } finally {
       setAiModelLoading(false);
-    }
-  };
-
-  const loadXiaomiAccounts = async () => {
-    try {
-      setXiaomiLoading(true);
-      const data = await getXiaomiAccounts();
-      setXiaomiAccounts(data);
-    } catch (error: any) {
-      message.error(`加载小米账号配置失败: ${error.message}`);
-    } finally {
-      setXiaomiLoading(false);
     }
   };
 
@@ -121,9 +97,8 @@ const Setting: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === "1") loadAIModels();
-    else if (activeTab === "2") loadXiaomiAccounts();
-    else if (activeTab === "3") loadAgents();
-    else if (activeTab === "4") loadDevices();
+    else if (activeTab === "2") loadAgents();
+    else if (activeTab === "3") loadDevices();
   }, [activeTab]);
 
   // ==================== AI模型管理 ====================
@@ -163,46 +138,6 @@ const Setting: React.FC = () => {
 
       setIsAIModelModalVisible(false);
       loadAIModels();
-    } catch (error: any) {
-      message.error(`保存失败: ${error.message}`);
-    }
-  };
-
-  // ==================== 小米账号管理 ====================
-
-  const handleEditXiaomi = (account: XiaomiAccount) => {
-    setSelectedXiaomiAccount(account);
-    setIsCreatingXiaomi(false);
-    xiaomiForm.setFieldsValue(account);
-    setIsXiaomiModalVisible(true);
-  };
-
-  const handleCreateXiaomi = () => {
-    setSelectedXiaomiAccount(null);
-    setIsCreatingXiaomi(true);
-    xiaomiForm.resetFields();
-    xiaomiForm.setFieldsValue({
-      region: "cn",
-      is_default: false,
-      is_active: true,
-    });
-    setIsXiaomiModalVisible(true);
-  };
-
-  const handleSaveXiaomi = async () => {
-    try {
-      const values = await xiaomiForm.validateFields();
-
-      if (isCreatingXiaomi) {
-        await createXiaomiAccount(values);
-        message.success("小米账号创建成功");
-      } else if (selectedXiaomiAccount) {
-        await updateXiaomiAccount(selectedXiaomiAccount.id, values);
-        message.success("小米账号更新成功");
-      }
-
-      setIsXiaomiModalVisible(false);
-      loadXiaomiAccounts();
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
     }
@@ -299,32 +234,6 @@ const Setting: React.FC = () => {
     },
   ];
 
-  const xiaomiColumns = [
-    { title: "用户名", dataIndex: "username", key: "username" },
-    { title: "区域", dataIndex: "region", key: "region" },
-    {
-      title: "默认",
-      dataIndex: "is_default",
-      key: "is_default",
-      render: (val: boolean) => val ? "是" : "否"
-    },
-    {
-      title: "状态",
-      dataIndex: "is_active",
-      key: "is_active",
-      render: (val: boolean) => val ? "启用" : "禁用"
-    },
-    {
-      title: "操作",
-      key: "action",
-      render: (_: any, record: XiaomiAccount) => (
-        <Button type="link" icon={<EditOutlined />} onClick={() => handleEditXiaomi(record)}>
-          编辑
-        </Button>
-      ),
-    },
-  ];
-
   const agentColumns = [
     { title: "名称", dataIndex: "agent_name", key: "agent_name" },
     { title: "代码", dataIndex: "agent_code", key: "agent_code" },
@@ -396,26 +305,6 @@ const Setting: React.FC = () => {
     },
     {
       key: "2",
-      label: "小米账号配置",
-      children: (
-        <Card>
-          <Space style={{ marginBottom: 16 }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateXiaomi}>
-              新增账号
-            </Button>
-          </Space>
-          <Table
-            dataSource={xiaomiAccounts}
-            columns={xiaomiColumns}
-            rowKey="id"
-            loading={xiaomiLoading}
-            pagination={false}
-          />
-        </Card>
-      ),
-    },
-    {
-      key: "3",
       label: "Agent 配置",
       children: (
         <Card>
@@ -430,7 +319,7 @@ const Setting: React.FC = () => {
       ),
     },
     {
-      key: "4",
+      key: "3",
       label: "设备配置",
       children: (
         <Card>
@@ -485,41 +374,6 @@ const Setting: React.FC = () => {
           </Form.Item>
           <Form.Item label="最大Token数" name="max_tokens">
             <InputNumber min={1} max={8192} style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item label="设为默认" name="is_default" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item label="启用" name="is_active" valuePropName="checked">
-            <Switch />
-        </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 小米账号编辑模态框 */}
-      <Modal
-        title={isCreatingXiaomi ? "新增小米账号" : "编辑小米账号"}
-        open={isXiaomiModalVisible}
-        onOk={handleSaveXiaomi}
-        onCancel={() => setIsXiaomiModalVisible(false)}
-        width={500}
-      >
-        <Form form={xiaomiForm} layout="vertical">
-          <Form.Item label="手机号" name="username" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="密码" name="password" rules={[{ required: true }]}>
-            <Input.Password />
-          </Form.Item>
-          <Form.Item label="区域" name="region" rules={[{ required: true }]}>
-            <Select>
-              <Select.Option value="cn">中国</Select.Option>
-              <Select.Option value="de">欧洲</Select.Option>
-              <Select.Option value="us">美国</Select.Option>
-              <Select.Option value="ru">俄罗斯</Select.Option>
-              <Select.Option value="tw">台湾</Select.Option>
-              <Select.Option value="sg">新加坡</Select.Option>
-              <Select.Option value="i2">备用区域</Select.Option>
-            </Select>
           </Form.Item>
           <Form.Item label="设为默认" name="is_default" valuePropName="checked">
             <Switch />
