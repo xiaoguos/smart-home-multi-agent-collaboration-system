@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 设备配置
-AC_IP = "192.168.110.131"
+AC_IP = "192.168.110.128"
 AC_TOKEN = "1724bf8d57b355173dfa08ae23367f86"
 AC_MODEL = "lumi.acpartner.mcn02"
 
