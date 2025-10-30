@@ -5,7 +5,7 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const backendUrl = env.VITE_BACKEND_URL || 'http://127.0.0.1:2100';
+  const backendUrl = env.VITE_BACKEND_URL;
   
   return {
   plugins: [react()],

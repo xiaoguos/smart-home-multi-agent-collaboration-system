@@ -34,7 +34,10 @@ class DatabaseConnection:
         self.strict_mode = strict_mode
         self._connection = None
         self.config = self._load_config(config_path)
-        self.db_config = self.config.get('database', {}).get('starrocks', {})
+        # 获取数据库类型，默认为 starrocks
+        self.db_type = self.config.get('database', {}).get('type', 'starrocks')
+        # 根据类型选择对应的配置
+        self.db_config = self.config.get('database', {}).get(self.db_type, {})
     
     def _load_config(self, config_path: str) -> dict:
         """加载YAML配置文件"""
@@ -211,4 +214,11 @@ def insert(sql: str, params: tuple = None) -> int:
     if db is None:
         raise DatabaseConnectionError("数据库未初始化，请先调用 init_database()")
     return db.execute_update(sql, params)
+
+
+def get_db_type() -> str:
+    """获取当前数据库类型"""
+    if db is None:
+        raise DatabaseConnectionError("数据库未初始化，请先调用 init_database()")
+    return db.db_type
 

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import uvicorn
 
 # 确保当前目录在 Python 路径中
 current_dir = Path(__file__).parent
@@ -19,6 +20,8 @@ if str(current_dir) not in sys.path:
 
 from api.chat import router as chat_router
 from api.config import router as config_router
+from api.xiaomi_auth import router as xiaomi_router
+from api.auth import router as auth_router
 from config import settings
 from database import init_database, DatabaseConnectionError
 
@@ -78,6 +81,8 @@ app.add_middleware(
 # 注册路由
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(config_router, prefix="/api/v1/config", tags=["Config"])
+app.include_router(xiaomi_router, prefix="/api/v1/xiaomi", tags=["Xiaomi Auth"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 
 
 @app.get("/")
@@ -106,11 +111,11 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    
     uvicorn.run(
         "__main__:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
         log_level="info",
+        http="h11",  # 使用 h11 避免 httptools 问题
     )

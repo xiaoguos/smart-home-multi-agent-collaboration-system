@@ -81,7 +81,10 @@ class ColorLogger(logging.Logger):
 logging.setLoggerClass(ColorLogger)
 _LOGGER = logging.getLogger("token_extractor")
 
-
+# _ssecurity = "R9egnuetTRF9sMP2jy9yJQ=="
+# userId = "3128533266"
+# _cUserId = "5suobuxuMCJG7d6Wtp3I28D30l0"
+# serviceToken = "2ib8u26oDE7OoCSawL3M5rvrIR7koVw/WekyvrNhbev53aXMYX/uJfejfgVo9tsOmHGfTz4iQMtzAnDsCxu5SY8daXffskdmzbAemjBQNfSoZDe21hex5Emq1Jew2eAQK73MSl4EaQOyhaMVMP2AJkJe8GNCAezTAShCa8EL1wHbp7UCgMCIQsPWF883aSdI1Lvi28qXTM26wYFjtsKHcOgkg9j82xp8YDgXKhw5wDw="
 class XiaomiCloudConnector:
 
     def __init__(self, username, password):
@@ -91,13 +94,13 @@ class XiaomiCloudConnector:
         self._device_id = self.generate_device_id()
         self._session = requests.session()
         self._sign = None
-        self._ssecurity = "R9egnuetTRF9sMP2jy9yJQ=="
-        self.userId = "3128533266"
-        self._cUserId = "5suobuxuMCJG7d6Wtp3I28D30l0"
+        self._ssecurity = ""
+        self.userId = ""
+        self._cUserId = ""
         self._passToken = None
         self._location = None
         self._code = None
-        self._serviceToken = "2ib8u26oDE7OoCSawL3M5rvrIR7koVw/WekyvrNhbev53aXMYX/uJfejfgVo9tsOmHGfTz4iQMtzAnDsCxu5SY8daXffskdmzbAemjBQNfSoZDe21hex5Emq1Jew2eAQK73MSl4EaQOyhaMVMP2AJkJe8GNCAezTAShCa8EL1wHbp7UCgMCIQsPWF883aSdI1Lvi28qXTM26wYFjtsKHcOgkg9j82xp8YDgXKhw5wDw="
+        self._serviceToken = ""
 
     def login_step_1(self):
         _LOGGER.debug("login_step_1")
@@ -128,8 +131,8 @@ class XiaomiCloudConnector:
 
         return False
 
+    # 使用密码登录
     def login_step_2(self) -> bool:
-        _LOGGER.debug("login_step_2")
         url: str = "https://account.xiaomi.com/pass/serviceLoginAuth2"
         headers: dict = {
             "User-Agent": self._agent,
@@ -144,14 +147,8 @@ class XiaomiCloudConnector:
             "_sign": self._sign,
             "_json": "true"
         }
-        _LOGGER.debug("login_step_2: URL: %s", url)
-        _LOGGER.debug("login_step_2: Fields: %s", fields)
-
         response = self._session.post(url, headers=headers, params=fields, allow_redirects=False)
-        _LOGGER.debug("login_step_2: Response text: %s", response.text)
-
         valid: bool = response is not None and response.status_code == 200
-
         if valid:
             json_resp: dict = self.to_json(response.text)
             if "captchaUrl" in json_resp and json_resp["captchaUrl"] is not None:
@@ -159,7 +156,6 @@ class XiaomiCloudConnector:
                     parser.error("Captcha solution required, rerun in interactive mode")
                 captcha_code: str = self.handle_captcha(json_resp["captchaUrl"])
                 if not captcha_code:
-                    _LOGGER.debug("Could not solve captcha.")
                     return False
                 # Add captcha code to the fields and retry
                 fields["captCode"] = captcha_code
@@ -172,7 +168,7 @@ class XiaomiCloudConnector:
                     _LOGGER.error("Login failed even after captcha.")
                     return False
                 if "code" in json_resp and json_resp["code"] == 87001:
-                    print_if_interactive("Invalid captcha.")
+                    print_if_interactive("验证码无效。")
                     return False
 
             valid = "ssecurity" in json_resp and len(str(json_resp["ssecurity"])) > 4
@@ -189,11 +185,11 @@ class XiaomiCloudConnector:
                         parser.error("2FA solution required, rerun in interactive mode")
                     verify_url = json_resp["notificationUrl"]
 
-                    print_if_interactive(f"{Fore.YELLOW}Two factor authentication required, please use following URL to obtain 2FA code:")
+                    print_if_interactive(f"{Fore.YELLOW}需要双因素认证，请使用以下URL获取2FA代码：")
                     print_if_interactive(f"{Fore.BLUE}{verify_url}")
-                    print_if_interactive(f"{Fore.RED}Do not enter the code on Xiaomi website!")
+                    print_if_interactive(f"{Fore.RED}请勿在小米网站上输入该代码！")
                     print_if_interactive()
-                    print_if_interactive("2FA Code:")
+                    print_if_interactive("2FA代码：")
                     ticket = input()
                     print_if_interactive()
 
@@ -252,7 +248,7 @@ class XiaomiCloudConnector:
                 return data
 
         return False
-
+    # 获取服务令牌
     def login_step_3(self):
         _LOGGER.debug("login_step_3")
         headers = {
@@ -276,27 +272,27 @@ class XiaomiCloudConnector:
             _LOGGER.error("Unable to fetch captcha image.")
             return ""
 
-        print_if_interactive(f"{Fore.YELLOW}Captcha verification required.")
+        print_if_interactive(f"{Fore.YELLOW}需要验证码验证。")
         try:
             # Try to serve an image file
             start_image_server(response.content)
-            print_if_interactive(f"Captcha image URL: {Fore.BLUE}http://{args.host or '127.0.0.1'}:31415")
+            print_if_interactive(f"验证码图片URL: {Fore.BLUE}http://{args.host or '127.0.0.1'}:31415")
         except Exception as e1:
             _LOGGER.debug(e1)
             # Save image to a temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                 tmp.write(response.content)
                 tmp_path: str = tmp.name
-            print_if_interactive(f"Captcha image saved at: {tmp_path}")
+            print_if_interactive(f"验证码图片已保存至: {tmp_path}")
             try:
                 img = Image.open(tmp_path)
                 img.show()
             except Exception as e2:
                 _LOGGER.debug(e2)
-                print_if_interactive(f"Please open {tmp_path} and solve the captcha.")
+                print_if_interactive(f"请打开 {tmp_path} 并解决验证码。")
 
         # Ask user for a captcha solution
-        print_if_interactive(f"Enter captcha as shown in the image {Fore.BLUE}(case-sensitive){Style.RESET_ALL}:")
+        print_if_interactive(f"请输入图片中显示的验证码 {Fore.BLUE}(区分大小写){Style.RESET_ALL}：")
         captcha_solution: str = input().strip()
         print_if_interactive()
         return captcha_solution
@@ -311,11 +307,11 @@ class XiaomiCloudConnector:
                 if self.login_step_3():
                     return True
                 else:
-                    print_if_interactive(f"{Fore.RED}Unable to get service token.")
+                    print_if_interactive(f"{Fore.RED}无法获取服务令牌。")
             else:
-                print_if_interactive(f"{Fore.RED}Invalid login or password.")
+                print_if_interactive(f"{Fore.RED}用户名或密码无效。")
         else:
-            print_if_interactive(f"{Fore.RED}Invalid username.")
+            print_if_interactive(f"{Fore.RED}用户名无效。")
         return False
 
     def get_homes(self, country):
@@ -462,7 +458,7 @@ def print_tabbed(value: str, tab: int) -> None:
 
 def print_entry(key: str, value: str, tab: int) -> None:
     if value:
-        print_tabbed(f'{Fore.YELLOW}{key + ":": <10}{Style.RESET_ALL}{value}', tab)
+        print_tabbed(f'{Fore.YELLOW}{key + "：": <10}{Style.RESET_ALL}{value}', tab)
 
 
 def start_image_server(image: bytes) -> None:
@@ -487,98 +483,76 @@ def start_image_server(image: bytes) -> None:
 
 def main() -> None:
     servers_str = ", ".join(SERVERS)
-    if args.username:
-        username = args.username
-    else:
-        print_if_interactive(f"Username {Fore.BLUE}(email, phone number or user ID){Style.RESET_ALL}:")
-        username = input()
-    if args.password:
-        password = args.password
-    else:
-        print_if_interactive(f"Password {Fore.BLUE}(not displayed for privacy reasons){Style.RESET_ALL}:")
-        password = getpass("")
-    if args.server is not None:
-        server = args.server
-    elif args.non_interactive:
-        server = ""
-    else:
-        print_if_interactive(f"Server {Fore.BLUE}(one of: {servers_str}; Leave empty to check all available){Style.RESET_ALL}:")
-        server = input()
-        while server not in ["", *SERVERS]:
-            print_if_interactive(f"{Fore.RED}Invalid server provided. Valid values: {servers_str}")
-            print_if_interactive("Server:")
-            server = input()
-
-    print_if_interactive()
-    if not server == "":
-        servers_to_check = [server]
-    else:
-        servers_to_check = [*SERVERS]
+    # 初始化username
+    username = "13716858597"
+    # 初始化password
+    password = "WDep@26056"
+    # 初始化server
+    server = "cn"
+    servers_to_check = [server]
+    # 初始化connector
     connector = XiaomiCloudConnector(username, password)
-    print_if_interactive(f"{Fore.BLUE}Logging in...")
-    print_if_interactive()
-    logged = True  #connector.login()
+    logged = connector.login() # 登录
     if logged:
-        print_if_interactive(f"{Fore.GREEN}Logged in.")
-        print_if_interactive()
+        print_if_interactive(f"{Fore.GREEN}登录成功。")
         output = []
         for current_server in servers_to_check:
             all_homes = []
-            homes = connector.get_homes(current_server)
+            homes = connector.get_homes(current_server) # 获取家庭列表
             if homes is not None:
                 for h in homes['result']['homelist']:
                     all_homes.append({'home_id': h['id'], 'home_owner': connector.userId})
-            dev_cnt = connector.get_dev_cnt(current_server)
+            dev_cnt = connector.get_dev_cnt(current_server) # 获取设备数量
             if dev_cnt is not None:
                 for h in dev_cnt["result"]["share"]["share_family"]:
                     all_homes.append({'home_id': h['home_id'], 'home_owner': h['home_owner']})
-
+            # 如果未找到家庭，则输出错误信息
             if len(all_homes) == 0:
-                print_if_interactive(f'{Fore.RED}No homes found for server "{current_server}".')
-
+                print_if_interactive(f'{Fore.RED}在服务器 "{current_server}" 上未找到家庭。')
+            # 遍历家庭
             for home in all_homes:
                 devices = connector.get_devices(current_server, home['home_id'], home['home_owner'])
                 home["devices"] = []
                 if devices is not None:
                     if devices["result"]["device_info"] is None or len(devices["result"]["device_info"]) == 0:
-                        print_if_interactive(f'{Fore.RED}No devices found for server "{current_server}" @ home "{home["home_id"]}".')
+                        print_if_interactive(f'{Fore.RED}在服务器 "{current_server}" 的家庭 "{home["home_id"]}" 中未找到设备。')
                         continue
-                    print_if_interactive(f'Devices found for server "{current_server}" @ home "{home["home_id"]}":')
+                    print_if_interactive(f'在服务器 "{current_server}" 的家庭 "{home["home_id"]}" 中找到设备：')
                     for device in devices["result"]["device_info"]:
                         device_data = {**device}
                         print_tabbed(f"{Fore.BLUE}---------", 3)
                         if "name" in device:
-                            print_entry("NAME", device["name"], 3)
+                            print_entry("名称", device["name"], 3)
                         if "did" in device:
-                            print_entry("ID", device["did"], 3)
+                            print_entry("设备ID", device["did"], 3)
                             if "blt" in device["did"]:
                                 beaconkey = connector.get_beaconkey(current_server, device["did"])
                                 if beaconkey and "result" in beaconkey and "beaconkey" in beaconkey["result"]:
-                                    print_entry("BLE KEY", beaconkey["result"]["beaconkey"], 3)
+                                    print_entry("蓝牙密钥", beaconkey["result"]["beaconkey"], 3)
                                     device_data["BLE_DATA"] = beaconkey["result"]
                         if "mac" in device:
-                            print_entry("MAC", device["mac"], 3)
+                            print_entry("MAC地址", device["mac"], 3)
                         if "localip" in device:
-                            print_entry("IP", device["localip"], 3)
+                            print_entry("IP地址", device["localip"], 3)
                         if "token" in device:
-                            print_entry("TOKEN", device["token"], 3)
+                            print_entry("令牌", device["token"], 3)
                         if "model" in device:
-                            print_entry("MODEL", device["model"], 3)
+                            print_entry("型号", device["model"], 3)
                         home["devices"].append(device_data)
                     print_tabbed(f"{Fore.BLUE}---------", 3)
                     print_if_interactive()
                 else:
-                    print_if_interactive(f"{Fore.RED}Unable to get devices from server {current_server}.")
+                    print_if_interactive(f"{Fore.RED}无法从服务器 {current_server} 获取设备。")
             output.append({"server": current_server, "homes": all_homes})
         if args.output:
             with open(args.output, "w") as f:
                 f.write(json.dumps(output, indent=4))
     else:
-        print_if_interactive(f"{Fore.RED}Unable to log in.")
+        print_if_interactive(f"{Fore.RED}无法登录。")
 
     if not args.non_interactive:
         print_if_interactive()
-        print_if_interactive("Press ENTER to finish")
+        print_if_interactive("按回车键结束")
         input()
 
 
