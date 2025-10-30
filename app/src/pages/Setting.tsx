@@ -11,9 +11,12 @@ import {
   Table,
   Modal,
   Space,
+  Tag,
+  Badge,
+  Descriptions,
 } from "antd";
 import React, { useState, useEffect } from "react";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import "./style/setting.sass";
 import {
   getAIModels,
@@ -28,6 +31,11 @@ import {
   type Agent,
   type Device,
 } from "../api/config";
+import {
+  getXiaomiDevices,
+  type XiaomiDevice,
+  type XiaomiDevicesResponse,
+} from "../api/xiaomi";
 
 const Setting: React.FC = () => {
   const [activeTab, setActiveTab] = useState("1");
@@ -36,6 +44,7 @@ const Setting: React.FC = () => {
   const [aiModelLoading, setAiModelLoading] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
   const [deviceLoading, setDeviceLoading] = useState(false);
+  const [xiaomiDevicesLoading, setXiaomiDevicesLoading] = useState(false);
 
   // AI模型配置状态
   const [aiModels, setAiModels] = useState<AIModel[]>([]);
@@ -56,6 +65,12 @@ const Setting: React.FC = () => {
   const [deviceForm] = Form.useForm();
   const [isDeviceModalVisible, setIsDeviceModalVisible] = useState(false);
   const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+
+  // 米家设备状态
+  const [xiaomiDevices, setXiaomiDevices] = useState<XiaomiDevice[]>([]);
+  const [xiaomiDevicesInfo, setXiaomiDevicesInfo] = useState<XiaomiDevicesResponse["result"] | null>(null);
+  const [selectedXiaomiDevice, setSelectedXiaomiDevice] = useState<XiaomiDevice | null>(null);
+  const [isXiaomiDeviceDetailVisible, setIsXiaomiDeviceDetailVisible] = useState(false);
 
   // ==================== 数据加载 ====================
 
@@ -95,10 +110,39 @@ const Setting: React.FC = () => {
     }
   };
 
+  const loadXiaomiDevices = async () => {
+    try {
+      setXiaomiDevicesLoading(true);
+      // 从 localStorage 获取用户信息
+      const userStr = localStorage.getItem('user_info');
+      if (!userStr) {
+        message.error('请先登录系统账号');
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      const response = await getXiaomiDevices(user.id);
+      
+      if (response.code === 0) {
+        setXiaomiDevices(response.result.devices);
+        setXiaomiDevicesInfo(response.result);
+        message.success(`加载成功！共找到 ${response.result.total_devices} 个设备`);
+      } else {
+        message.error(response.message || "加载米家设备失败");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || error.message || "加载米家设备失败";
+      message.error(errorMsg);
+    } finally {
+      setXiaomiDevicesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "1") loadAIModels();
     else if (activeTab === "2") loadAgents();
     else if (activeTab === "3") loadDevices();
+    else if (activeTab === "4") loadXiaomiDevices();
   }, [activeTab]);
 
   // ==================== AI模型管理 ====================
@@ -280,6 +324,59 @@ const Setting: React.FC = () => {
     },
   ];
 
+  const xiaomiDeviceColumns = [
+    { 
+      title: "设备名称", 
+      dataIndex: "name", 
+      key: "name",
+      width: 200,
+    },
+    { 
+      title: "家庭", 
+      dataIndex: "home_name", 
+      key: "home_name",
+      width: 120,
+    },
+    { 
+      title: "型号", 
+      dataIndex: "model", 
+      key: "model",
+      width: 180,
+      ellipsis: true,
+    },
+    { 
+      title: "IP地址", 
+      dataIndex: "localip", 
+      key: "localip",
+      width: 130,
+    },
+    { 
+      title: "在线状态", 
+      dataIndex: "isOnline", 
+      key: "isOnline",
+      width: 100,
+      render: (val: boolean) => (
+        <Badge status={val ? "success" : "default"} text={val ? "在线" : "离线"} />
+      )
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 100,
+      render: (_: any, record: XiaomiDevice) => (
+        <Button 
+          type="link" 
+          onClick={() => {
+            setSelectedXiaomiDevice(record);
+            setIsXiaomiDeviceDetailVisible(true);
+          }}
+        >
+          查看详情
+        </Button>
+      ),
+    },
+  ];
+
   // ==================== 渲染 ====================
 
   const tabItems = [
@@ -334,6 +431,39 @@ const Setting: React.FC = () => {
             rowKey="id"
             loading={deviceLoading}
             pagination={false}
+          />
+        </Card>
+      ),
+    },
+    {
+      key: "4",
+      label: `米家设备 ${xiaomiDevicesInfo ? `(${xiaomiDevicesInfo.total_devices})` : ''}`,
+      children: (
+        <Card>
+          <Space style={{ marginBottom: 16 }}>
+            <Button 
+              type="primary" 
+              icon={<ReloadOutlined />} 
+              onClick={loadXiaomiDevices}
+              loading={xiaomiDevicesLoading}
+            >
+              刷新设备列表
+            </Button>
+            {xiaomiDevicesInfo && (
+              <Space>
+                <Tag color="blue">服务器: {xiaomiDevicesInfo.server}</Tag>
+                <Tag color="green">家庭数: {xiaomiDevicesInfo.total_homes}</Tag>
+                <Tag color="cyan">设备数: {xiaomiDevicesInfo.total_devices}</Tag>
+              </Space>
+            )}
+          </Space>
+          <Table
+            dataSource={xiaomiDevices}
+            columns={xiaomiDeviceColumns}
+            rowKey="did"
+            loading={xiaomiDevicesLoading}
+            pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 个设备` }}
+            scroll={{ x: 1000 }}
           />
         </Card>
       ),
@@ -455,6 +585,55 @@ const Setting: React.FC = () => {
             <Switch />
         </Form.Item>
       </Form>
+      </Modal>
+
+      {/* 米家设备详情模态框 */}
+      <Modal
+        title="米家设备详情"
+        open={isXiaomiDeviceDetailVisible}
+        onCancel={() => setIsXiaomiDeviceDetailVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setIsXiaomiDeviceDetailVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={700}
+      >
+        {selectedXiaomiDevice && (
+          <Descriptions column={2} bordered>
+            <Descriptions.Item label="设备名称" span={2}>
+              {selectedXiaomiDevice.name}
+            </Descriptions.Item>
+            <Descriptions.Item label="家庭">{selectedXiaomiDevice.home_name}</Descriptions.Item>
+            <Descriptions.Item label="在线状态">
+              <Badge 
+                status={selectedXiaomiDevice.isOnline ? "success" : "default"} 
+                text={selectedXiaomiDevice.isOnline ? "在线" : "离线"} 
+              />
+            </Descriptions.Item>
+            <Descriptions.Item label="设备ID" span={2}>
+              <Input.TextArea value={selectedXiaomiDevice.did} autoSize={{ minRows: 1, maxRows: 2 }} readOnly />
+            </Descriptions.Item>
+            <Descriptions.Item label="型号" span={2}>
+              {selectedXiaomiDevice.model}
+            </Descriptions.Item>
+            <Descriptions.Item label="IP地址">{selectedXiaomiDevice.localip || '-'}</Descriptions.Item>
+            <Descriptions.Item label="MAC地址">{selectedXiaomiDevice.mac || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Token" span={2}>
+              <Input.TextArea value={selectedXiaomiDevice.token} autoSize={{ minRows: 2, maxRows: 4 }} readOnly />
+            </Descriptions.Item>
+            {selectedXiaomiDevice.parent_id && (
+              <>
+                <Descriptions.Item label="父设备ID" span={2}>
+                  {selectedXiaomiDevice.parent_id}
+                </Descriptions.Item>
+                <Descriptions.Item label="父设备型号" span={2}>
+                  {selectedXiaomiDevice.parent_model}
+                </Descriptions.Item>
+              </>
+            )}
+          </Descriptions>
+        )}
       </Modal>
     </div>
   );

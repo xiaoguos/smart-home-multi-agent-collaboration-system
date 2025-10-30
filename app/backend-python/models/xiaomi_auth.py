@@ -38,6 +38,30 @@ class TwoFactorAuthRequest(BaseModel):
     ticket: str = Field(..., description="2FA验证码")
 
 
+class ManualCredentialsRequest(BaseModel):
+    """手动输入凭证请求"""
+    system_user_id: int = Field(..., description="系统用户ID")
+    xiaomi_username: str = Field(..., description="小米账号")
+    ssecurity: str = Field(..., description="_ssecurity参数")
+    userId: str = Field(..., description="userId参数")
+    cUserId: str = Field(..., description="_cUserId参数")
+    serviceToken: str = Field(..., description="serviceToken参数")
+    server: str = Field(default="cn", description="服务器区域")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "system_user_id": 1000000001,
+                "xiaomi_username": "13800138000",
+                "ssecurity": "R9egnuetTRF9sMP2jy9yJQ==",
+                "userId": "3128533266",
+                "cUserId": "5suobuxuMCJG7d6Wtp3I28D30l0",
+                "serviceToken": "2ib8u26oDE7OoCSawL3M5rvrIR7koVw...",
+                "server": "cn"
+            }
+        }
+
+
 # ==================== 响应模型 ====================
 
 class LoginStepResponse(BaseModel):

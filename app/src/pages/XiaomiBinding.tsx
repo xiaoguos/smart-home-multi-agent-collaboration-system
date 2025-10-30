@@ -24,17 +24,18 @@ import {
   verify2FA,
   resend2FACode,
   getCaptchaUrl,
-  type LoginStepResponse,
+  manualBindCredentials,
 } from "../api/xiaomi";
 import "./style/xiaomi-binding.sass";
 
-const { Title, Text, Paragraph, Link } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 const XiaomiBinding: React.FC = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [captchaForm] = Form.useForm();
   const [twoFAForm] = Form.useForm();
+  const [manualForm] = Form.useForm();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,8 @@ const XiaomiBinding: React.FC = () => {
   const [autoResendAttempted, setAutoResendAttempted] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [verifyUrl, setVerifyUrl] = useState<string>("");
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [xiaomiUsername, setXiaomiUsername] = useState<string>("");
 
   /**
    * 步骤1：提交账号密码
@@ -61,6 +64,7 @@ const XiaomiBinding: React.FC = () => {
       }
       
       const user = JSON.parse(userStr);
+      setXiaomiUsername(values.username); // 保存小米账号用于手动输入
       
       const response = await startXiaomiLogin({
         system_user_id: user.id,
@@ -246,6 +250,48 @@ const XiaomiBinding: React.FC = () => {
     }
   }, [currentStep]);
 
+  /**
+   * 手动输入凭证
+   */
+  const handleManualBind = async (values: any) => {
+    setLoading(true);
+    try {
+      // 从 localStorage 获取用户信息
+      const userStr = localStorage.getItem('user_info');
+      if (!userStr) {
+        message.error('请先登录系统账号');
+        navigate('/');
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      
+      const response = await manualBindCredentials({
+        system_user_id: user.id,
+        xiaomi_username: xiaomiUsername || values.xiaomi_username,
+        ssecurity: values.ssecurity.trim(),
+        userId: values.userId.trim(),
+        cUserId: values.cUserId.trim(),
+        serviceToken: values.serviceToken.trim(),
+        server: "cn",
+      });
+
+      if (response.status === "success") {
+        message.success(response.message);
+        setCurrentStep(3);
+        setTimeout(() => {
+          navigate("/chat");
+        }, 2000);
+      } else {
+        message.error(response.message || "绑定失败");
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.detail || "绑定失败，请检查参数是否正确");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="xiaomi-binding-container">
       <Card className="binding-card">
@@ -386,84 +432,213 @@ const XiaomiBinding: React.FC = () => {
         {/* 步骤 2: 双因素认证 */}
         {currentStep === 2 && (
           <div className="step-content">
-            <Alert
-              message="双因素认证"
-              description={
-                <>
-                  <Paragraph style={{ marginBottom: 12 }}>
-                    <Text strong>请按以下步骤操作：</Text>
-                  </Paragraph>
-                  <Paragraph style={{ marginBottom: 8 }}>
-                    1. 点击下方按钮打开小米验证页面
-                  </Paragraph>
-                  <Paragraph style={{ marginBottom: 12 }}>
-                    2. 在小米页面点击 <Text mark>"发送验证码"</Text> 按钮
-                  </Paragraph>
-                  {verifyUrl && (
-                    <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                      <Button 
-                        type="primary"
-                        href={verifyUrl} 
-                        target="_blank"
-                        icon={<SafetyOutlined />}
-                        size="large"
-                      >
-                        打开小米验证页面
+            {!showManualInput ? (
+              <>
+                <Alert
+                  message="双因素认证"
+                  description={
+                    <>
+                      <Paragraph style={{ marginBottom: 12 }}>
+                        <Text strong>请按以下步骤操作：</Text>
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        1. 点击下方按钮打开小米验证页面
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 12 }}>
+                        2. 在小米页面点击 <Text mark>"发送验证码"</Text> 按钮
+                      </Paragraph>
+                      {verifyUrl && (
+                        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                          <Button 
+                            type="primary"
+                            href={verifyUrl} 
+                            target="_blank"
+                            icon={<SafetyOutlined />}
+                            size="large"
+                          >
+                            打开小米验证页面
+                          </Button>
+                        </div>
+                      )}
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        3. 查收您<Text strong>{verifyMethod}</Text>的验证码
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 0 }}>
+                        4. 在下方输入框中填写收到的<Text mark>6位数字</Text>验证码
+                      </Paragraph>
+                    </>
+                  }
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 24 }}
+                />
+
+                <Form
+                  form={twoFAForm}
+                  layout="vertical"
+                  onFinish={handle2FASubmit}
+                >
+                  <Form.Item
+                    label="验证码（Ticket）"
+                    name="ticket"
+                    rules={[
+                      { required: true, message: "请输入验证码" },
+                      { pattern: /^\d{6}$/, message: "验证码必须为6位数字" }
+                    ]}
+                  >
+                    <Input
+                      placeholder="请输入小米发送的6位数字验证码"
+                      maxLength={6}
+                      size="large"
+                      autoFocus
+                    />
+                  </Form.Item>
+
+                  <Form.Item>
+                    <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                      <Button onClick={() => navigate("/chat")}>取消</Button>
+                      <Space>
+                        <Button 
+                          onClick={() => handleResend2FACode(false)} 
+                          loading={resendingCode}
+                          disabled={loading || countdown > 0}
+                        >
+                          {countdown > 0 ? `重新发送 (${countdown}s)` : "重新发送验证码"}
+                        </Button>
+                        <Button type="primary" htmlType="submit" loading={loading} size="large">
+                          提交验证
+                        </Button>
+                      </Space>
+                    </Space>
+                  </Form.Item>
+
+                  <Form.Item>
+                    <div style={{ textAlign: 'center', marginTop: 16 }}>
+                      <Text type="secondary">验证码无法接收？</Text>
+                      <br />
+                      <Button type="link" onClick={() => setShowManualInput(true)}>
+                        切换到手动输入模式（抓包方式）
                       </Button>
                     </div>
-                  )}
-                  <Paragraph style={{ marginBottom: 8 }}>
-                    3. 查收您<Text strong>{verifyMethod}</Text>的验证码
-                  </Paragraph>
-                  <Paragraph style={{ marginBottom: 0 }}>
-                    4. 在下方输入框中填写收到的<Text mark>6位数字</Text>验证码
-                  </Paragraph>
-                </>
-              }
-              type="warning"
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
-
-            <Form
-              form={twoFAForm}
-              layout="vertical"
-              onFinish={handle2FASubmit}
-            >
-              <Form.Item
-                label="验证码（Ticket）"
-                name="ticket"
-                rules={[
-                  { required: true, message: "请输入验证码" },
-                  { pattern: /^\d{6}$/, message: "验证码必须为6位数字" }
-                ]}
-              >
-                <Input
-                  placeholder="请输入小米发送的6位数字验证码"
-                  maxLength={6}
-                  size="large"
-                  autoFocus
+                  </Form.Item>
+                </Form>
+              </>
+            ) : (
+              <>
+                <Alert
+                  message="手动输入凭证"
+                  description={
+                    <>
+                      <Paragraph style={{ marginBottom: 12 }}>
+                        <Text strong>抓包步骤：</Text>
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        1. 打开抓包工具（如 Charles、Fiddler、浏览器开发者工具等）
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        2. 点击下方按钮打开小米验证页面，完成验证
+                      </Paragraph>
+                      {verifyUrl && (
+                        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                          <Button 
+                            type="primary"
+                            href={verifyUrl} 
+                            target="_blank"
+                            icon={<SafetyOutlined />}
+                            size="large"
+                          >
+                            打开小米验证页面
+                          </Button>
+                        </div>
+                      )}
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        3. 在抓包记录中找到请求 <Text code>api.io.mi.com</Text> 的请求
+                      </Paragraph>
+                      <Paragraph style={{ marginBottom: 8 }}>
+                        4. 从请求 Cookie 或响应中提取以下参数：
+                      </Paragraph>
+                      <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
+                        • <Text code>_ssecurity</Text>（通常在响应中）
+                      </Paragraph>
+                      <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
+                        • <Text code>userId</Text>（数字ID）
+                      </Paragraph>
+                      <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
+                        • <Text code>_cUserId</Text>（长字符串）
+                      </Paragraph>
+                      <Paragraph style={{ marginLeft: 24, marginBottom: 0 }}>
+                        • <Text code>serviceToken</Text>（很长的字符串）
+                      </Paragraph>
+                    </>
+                  }
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 24 }}
                 />
-              </Form.Item>
 
-              <Form.Item>
-                <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                  <Button onClick={() => navigate("/chat")}>取消</Button>
-                  <Space>
-                    <Button 
-                      onClick={() => handleResend2FACode(false)} 
-                      loading={resendingCode}
-                      disabled={loading || countdown > 0}
+                <Form
+                  form={manualForm}
+                  layout="vertical"
+                  onFinish={handleManualBind}
+                  initialValues={{ xiaomi_username: xiaomiUsername }}
+                >
+                  {!xiaomiUsername && (
+                    <Form.Item
+                      label="小米账号"
+                      name="xiaomi_username"
+                      rules={[{ required: true, message: "请输入小米账号" }]}
                     >
-                      {countdown > 0 ? `重新发送 (${countdown}s)` : "重新发送验证码"}
-                    </Button>
-                    <Button type="primary" htmlType="submit" loading={loading} size="large">
-                      提交验证
-                    </Button>
-                  </Space>
-                </Space>
-              </Form.Item>
-            </Form>
+                      <Input placeholder="手机号或邮箱" size="large" />
+                    </Form.Item>
+                  )}
+
+                  <Form.Item
+                    label="_ssecurity"
+                    name="ssecurity"
+                    rules={[{ required: true, message: "请输入_ssecurity参数" }]}
+                  >
+                    <Input placeholder="例如：R9egnuetTRF9sMP2jy9yJQ==" size="large" />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="userId"
+                    name="userId"
+                    rules={[{ required: true, message: "请输入userId参数" }]}
+                  >
+                    <Input placeholder="例如：3128533266" size="large" />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="_cUserId"
+                    name="cUserId"
+                    rules={[{ required: true, message: "请输入_cUserId参数" }]}
+                  >
+                    <Input placeholder="例如：5suobuxuMCJG7d6Wtp3I28D30l0" size="large" />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="serviceToken"
+                    name="serviceToken"
+                    rules={[{ required: true, message: "请输入serviceToken参数" }]}
+                  >
+                    <Input.TextArea 
+                      placeholder="很长的字符串，例如：2ib8u26oDE7OoCSawL3M5rvrIR7koVw..." 
+                      rows={4}
+                      size="large"
+                    />
+                  </Form.Item>
+
+                  <Form.Item>
+                    <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                      <Button onClick={() => setShowManualInput(false)}>返回验证码方式</Button>
+                      <Button type="primary" htmlType="submit" loading={loading} size="large">
+                        验证并绑定
+                      </Button>
+                    </Space>
+                  </Form.Item>
+                </Form>
+              </>
+            )}
           </div>
         )}
 

@@ -24,6 +24,17 @@ export interface TwoFactorAuthRequest {
   ticket: string;
 }
 
+/** 手动输入凭证请求 */
+export interface ManualCredentialsRequest {
+  system_user_id: number;
+  xiaomi_username: string;
+  ssecurity: string;
+  userId: string;
+  cUserId: string;
+  serviceToken: string;
+  server?: string;
+}
+
 /** 登录步骤响应 */
 export interface LoginStepResponse {
   session_id: string;
@@ -93,4 +104,54 @@ export const checkBindingStatus = async (systemUserId: number): Promise<BindingS
  * 检查小米账号绑定状态（别名）
  */
 export const checkXiaomiBindingStatus = checkBindingStatus;
+
+/**
+ * 手动输入凭证绑定
+ */
+export const manualBindCredentials = async (data: ManualCredentialsRequest): Promise<LoginStepResponse> => {
+  return await httpClient.post<LoginStepResponse>('/api/v1/xiaomi/manual/bind', data);
+};
+
+/** 米家设备信息 */
+export interface XiaomiDevice {
+  home_id: string;
+  home_name: string;
+  name: string;
+  did: string;
+  model: string;
+  token: string;
+  mac: string;
+  localip: string;
+  parent_id: string;
+  parent_model: string;
+  show_mode: number;
+  isOnline: boolean;
+}
+
+/** 米家家庭信息 */
+export interface XiaomiHome {
+  home_id: string;
+  home_name: string;
+  home_owner: string;
+}
+
+/** 米家设备列表响应 */
+export interface XiaomiDevicesResponse {
+  code: number;
+  message: string;
+  result: {
+    server: string;
+    total_homes: number;
+    total_devices: number;
+    homes: XiaomiHome[];
+    devices: XiaomiDevice[];
+  };
+}
+
+/**
+ * 获取米家设备列表
+ */
+export const getXiaomiDevices = async (systemUserId: number, server: string = 'cn'): Promise<XiaomiDevicesResponse> => {
+  return await httpClient.get<XiaomiDevicesResponse>(`/api/v1/xiaomi/devices?system_user_id=${systemUserId}&server=${server}`);
+};
 

@@ -28,6 +28,7 @@ from models.xiaomi_auth import (
     XiaomiLoginRequest,
     CaptchaSubmitRequest,
     TwoFactorAuthRequest,
+    ManualCredentialsRequest,
     LoginStepResponse,
     BindingStatusResponse,
 )
@@ -460,6 +461,119 @@ class XiaomiCloudConnector:
     @staticmethod
     def to_json(response_text):
         return json.loads(response_text.replace("&&&START&&&", ""))
+    
+    def get_homes(self, country: str = "cn") -> Optional[dict]:
+        """获取家庭列表"""
+        url = self.get_api_url(country) + "/v2/homeroom/gethome"
+        params = {
+            "data": '{"fg": true, "fetch_share": true, "fetch_share_dev": true, "limit": 300, "app_ver": 7}'
+        }
+        return self.execute_api_call_encrypted(url, params)
+    
+    def get_devices(self, country: str, home_id: str, owner_id: str) -> Optional[dict]:
+        """获取指定家庭的设备列表"""
+        url = self.get_api_url(country) + "/v2/home/home_device_list"
+        params = {
+            "data": '{"home_owner": ' + str(owner_id) +
+            ',"home_id": ' + str(home_id) +
+            ',  "limit": 200,  "get_split_device": true, "support_smart_home": true}'
+        }
+        return self.execute_api_call_encrypted(url, params)
+    
+    def get_dev_cnt(self, country: str = "cn") -> Optional[dict]:
+        """获取设备数量"""
+        url = self.get_api_url(country) + "/v2/user/get_device_cnt"
+        params = {
+            "data": '{ "fetch_own": true, "fetch_share": true}'
+        }
+        return self.execute_api_call_encrypted(url, params)
+    
+    def execute_api_call_encrypted(self, url: str, params: dict) -> Optional[dict]:
+        """执行加密的API调用"""
+        headers = {
+            "Accept-Encoding": "identity",
+            "User-Agent": self._agent,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "x-xiaomi-protocal-flag-cli": "PROTOCAL-HTTP2",
+            "MIOT-ENCRYPT-ALGORITHM": "ENCRYPT-RC4",
+        }
+        cookies = {
+            "userId": str(self.userId),
+            "yetAnotherServiceToken": str(self._serviceToken),
+            "serviceToken": str(self._serviceToken),
+            "locale": "en_GB",
+            "timezone": "GMT+02:00",
+            "is_daylight": "1",
+            "dst_offset": "3600000",
+            "channel": "MI_APP_STORE"
+        }
+        
+        millis = round(time.time() * 1000)
+        nonce = self.generate_nonce(millis)
+        signed_nonce = self.signed_nonce(nonce)
+        fields = self.generate_enc_params(url, "POST", signed_nonce, nonce, params, self._ssecurity)
+        
+        try:
+            response = self._session.post(url, headers=headers, cookies=cookies, params=fields, timeout=10)
+            if response.status_code == 200:
+                decoded = self.decrypt_rc4(self.signed_nonce(fields["_nonce"]), response.text)
+                return json.loads(decoded)
+        except Exception as e:
+            logger.error(f"execute_api_call_encrypted error: {e}")
+        return None
+    
+    @staticmethod
+    def get_api_url(country: str) -> str:
+        """获取API URL"""
+        return "https://" + ("" if country == "cn" else (country + ".")) + "api.io.mi.com/app"
+    
+    def signed_nonce(self, nonce: str) -> str:
+        """签名nonce"""
+        hash_object = hashlib.sha256(base64.b64decode(self._ssecurity) + base64.b64decode(nonce))
+        return base64.b64encode(hash_object.digest()).decode('utf-8')
+    
+    @staticmethod
+    def generate_nonce(millis: int) -> str:
+        """生成nonce"""
+        nonce_bytes = os.urandom(8) + (int(millis / 60000)).to_bytes(4, byteorder='big')
+        return base64.b64encode(nonce_bytes).decode()
+    
+    @staticmethod
+    def generate_enc_signature(url: str, method: str, signed_nonce: str, params: dict) -> str:
+        """生成加密签名"""
+        signature_params = [str(method).upper(), url.split("com")[1].replace("/app/", "/")]
+        for k, v in params.items():
+            signature_params.append(f"{k}={v}")
+        signature_params.append(signed_nonce)
+        signature_string = "&".join(signature_params)
+        return base64.b64encode(hashlib.sha1(signature_string.encode('utf-8')).digest()).decode()
+    
+    @staticmethod
+    def generate_enc_params(url: str, method: str, signed_nonce: str, nonce: str, params: dict, ssecurity: str) -> dict:
+        """生成加密参数"""
+        params['rc4_hash__'] = XiaomiCloudConnector.generate_enc_signature(url, method, signed_nonce, params)
+        for k, v in params.items():
+            params[k] = XiaomiCloudConnector.encrypt_rc4(signed_nonce, v)
+        params.update({
+            'signature': XiaomiCloudConnector.generate_enc_signature(url, method, signed_nonce, params),
+            'ssecurity': ssecurity,
+            '_nonce': nonce,
+        })
+        return params
+    
+    @staticmethod
+    def encrypt_rc4(password: str, payload: str) -> str:
+        """RC4加密"""
+        r = ARC4.new(base64.b64decode(password))
+        r.encrypt(bytes(1024))
+        return base64.b64encode(r.encrypt(payload.encode())).decode()
+    
+    @staticmethod
+    def decrypt_rc4(password: str, payload: str) -> bytes:
+        """RC4解密"""
+        r = ARC4.new(base64.b64decode(password))
+        r.encrypt(bytes(1024))
+        return r.encrypt(base64.b64decode(payload))
 
 
 @router.post("/login/start", response_model=LoginStepResponse)
@@ -894,6 +1008,163 @@ async def check_binding_status(system_user_id: int):
     except Exception as e:
         logger.error(f"check_binding_status error: {e}")
         return BindingStatusResponse(is_bound=False)
+
+
+@router.get("/devices")
+async def get_xiaomi_devices(system_user_id: int, server: str = "cn"):
+    """
+    获取用户的米家设备列表
+    需要传入 system_user_id 参数
+    返回所有家庭的所有设备信息
+    """
+    try:
+        # 查询用户凭证
+        sql = """
+            SELECT service_token, ssecurity, xiaomi_user_id, server
+            FROM xiaomi_credentials 
+            WHERE system_user_id = %s
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """
+        result = query(sql, (system_user_id,))
+        
+        if not result or len(result) == 0:
+            raise HTTPException(status_code=404, detail="未找到小米账号绑定信息，请先绑定小米账号")
+        
+        credentials = result[0]
+        
+        # 创建临时connector
+        connector = XiaomiCloudConnector("", "")
+        connector._serviceToken = credentials["service_token"]
+        connector._ssecurity = credentials["ssecurity"]
+        connector.userId = credentials["xiaomi_user_id"]
+        
+        # 使用传入的server或数据库中的server
+        current_server = server or credentials.get("server", "cn")
+        
+        # 获取所有家庭
+        all_homes = []
+        homes_result = connector.get_homes(current_server)
+        
+        if homes_result and homes_result.get("code") == 0:
+            for h in homes_result['result']['homelist']:
+                all_homes.append({
+                    'home_id': h['id'],
+                    'home_name': h.get('name', '未命名家庭'),
+                    'home_owner': connector.userId
+                })
+        
+        # 获取共享的家庭
+        dev_cnt_result = connector.get_dev_cnt(current_server)
+        if dev_cnt_result and dev_cnt_result.get("code") == 0:
+            share_families = dev_cnt_result.get("result", {}).get("share", {}).get("share_family", [])
+            for h in share_families:
+                all_homes.append({
+                    'home_id': h['home_id'],
+                    'home_name': h.get('home_name', '共享家庭'),
+                    'home_owner': h['home_owner']
+                })
+        
+        # 获取每个家庭的设备
+        all_devices = []
+        for home in all_homes:
+            devices_result = connector.get_devices(current_server, home['home_id'], home['home_owner'])
+            
+            if devices_result and devices_result.get("code") == 0:
+                device_info = devices_result.get("result", {}).get("device_info", [])
+                
+                for device in device_info:
+                    device_data = {
+                        "home_id": home['home_id'],
+                        "home_name": home['home_name'],
+                        "name": device.get("name", "未命名设备"),
+                        "did": device.get("did", ""),
+                        "model": device.get("model", ""),
+                        "token": device.get("token", ""),
+                        "mac": device.get("mac", ""),
+                        "localip": device.get("localip", ""),
+                        "parent_id": device.get("parent_id", ""),
+                        "parent_model": device.get("parent_model", ""),
+                        "show_mode": device.get("show_mode", 0),
+                        "isOnline": device.get("isOnline", False),
+                    }
+                    all_devices.append(device_data)
+        
+        return {
+            "code": 0,
+            "message": "success",
+            "result": {
+                "server": current_server,
+                "total_homes": len(all_homes),
+                "total_devices": len(all_devices),
+                "homes": all_homes,
+                "devices": all_devices
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"get_xiaomi_devices error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取设备列表失败: {str(e)}")
+
+
+@router.post("/manual/bind", response_model=LoginStepResponse)
+async def manual_bind_credentials(request: ManualCredentialsRequest):
+    """
+    手动输入小米凭证并绑定
+    用户通过抓包获取 _ssecurity、userId、_cUserId、serviceToken 参数
+    通过获取设备列表来验证凭证是否有效
+    """
+    try:
+        # 创建临时的 connector 用于验证凭证
+        # 使用虚拟的用户名和密码，因为我们直接使用提供的凭证
+        connector = XiaomiCloudConnector("", "")
+        
+        # 设置手动提供的凭证
+        connector._ssecurity = request.ssecurity
+        connector.userId = request.userId
+        connector._cUserId = request.cUserId
+        connector._serviceToken = request.serviceToken
+        
+        # 尝试获取设备数量来验证凭证是否有效
+        logger.info(f"验证用户 {request.system_user_id} 的小米凭证...")
+        result = connector.get_dev_cnt(request.server)
+        
+        if result and result.get("code") == 0:
+            # 凭证有效，保存到数据库
+            logger.info(f"凭证验证成功: {result}")
+            await save_xiaomi_credentials(
+                system_user_id=request.system_user_id,
+                xiaomi_username=request.xiaomi_username,
+                service_token=request.serviceToken,
+                ssecurity=request.ssecurity,
+                xiaomi_user_id=request.userId,
+                server=request.server
+            )
+            
+            device_count = result.get("result", {})
+            return LoginStepResponse(
+                session_id="manual_bind",
+                status="success",
+                message=f"绑定成功！检测到 {device_count.get('own_cnt', 0)} 个设备",
+                data={
+                    "device_count": device_count
+                }
+            )
+        else:
+            # 凭证无效
+            error_msg = "凭证验证失败"
+            if result:
+                error_msg = f"凭证验证失败: {result.get('message', '未知错误')}"
+            logger.warning(f"凭证验证失败: {result}")
+            raise HTTPException(status_code=400, detail=error_msg)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"manual_bind_credentials error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
 
 async def save_xiaomi_credentials(system_user_id: int, xiaomi_username: str, 
