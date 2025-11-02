@@ -637,23 +637,6 @@ const Chat: React.FC = () => {
 
       {/* 主聊天区域 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        {/* 切换侧边栏按钮 */}
-        {!drawerOpen && (
-          <Button
-            type="primary"
-            icon={<MessageOutlined />}
-            onClick={() => setDrawerOpen(true)}
-            style={{
-              position: 'absolute',
-              top: 16,
-              left: 16,
-              zIndex: 10,
-            }}
-          >
-            对话列表
-          </Button>
-        )}
-
         {/* 小米账号绑定提示 */}
         {!checkingBinding && !isBound && (
           <div style={{ padding: "16px 16px 0" }}>
@@ -680,6 +663,18 @@ const Chat: React.FC = () => {
           />
         </div>
         <div className="chat-input-container">
+        {!drawerOpen && (
+          <Button
+            type="primary"
+            icon={<MessageOutlined />}
+            onClick={() => setDrawerOpen(true)}
+            style={{
+              marginBottom: 16,
+            }}
+          >
+            对话列表
+          </Button>
+        )}
           <Sender
             className="chat-input"
             loading={loading}
