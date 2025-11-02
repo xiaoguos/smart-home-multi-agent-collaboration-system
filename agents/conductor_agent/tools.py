@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 import json
 from pydantic import BaseModel, Field
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -11,12 +11,106 @@ import httpx
 from a2a.client import ClientFactory, A2ACardResolver
 from a2a.types import Message, Part
 from a2a.client.client import ClientConfig
+import sys
+import os
+import time
+import random
+
+# 添加父目录到路径以导入database
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'app', 'backend-python'))
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
+
+# 延迟导入database模块，避免循环依赖
+_db_module = None
+def get_db():
+    """延迟加载数据库模块"""
+    global _db_module
+    if _db_module is None:
+        try:
+            from database import insert
+            _db_module = {'insert': insert}
+            logger.info("✅ 数据库模块加载成功")
+        except Exception as e:
+            logger.warning(f"⚠️ 数据库模块加载失败（将跳过数据库记录）: {e}")
+            _db_module = {'insert': None}
+    return _db_module
+
+def save_device_operation(
+    system_user_id: int,
+    device_type: str,
+    action: str,
+    success: bool,
+    context_id: Optional[str] = None,
+    device_name: Optional[str] = None,
+    parameters: Optional[Dict[str, Any]] = None,
+    response: Optional[str] = None,
+    error_message: Optional[str] = None,
+    execution_time: Optional[int] = None
+):
+    """
+    保存设备操作记录到数据库（同步版本）
+    
+    注意：这是一个同步函数，会在工具调用时直接执行
+    """
+    try:
+        db = get_db()
+        if db['insert'] is None:
+            logger.debug("数据库未加载，跳过记录")
+            return False
+        
+        op_id = int(time.time() * 1000000) + random.randint(1000, 9999)
+        parameters_json = json.dumps(parameters, ensure_ascii=False) if parameters else None
+        
+        sql = """
+            INSERT INTO device_operations 
+            (id, system_user_id, context_id, device_type, device_name, action, 
+             parameters, success, response, error_message, execution_time, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """
+        
+        params = (
+            op_id,
+            system_user_id,
+            context_id,
+            device_type,
+            device_name,
+            action,
+            parameters_json,
+            success,
+            response[:1000] if response else None,  # 限制响应长度
+            error_message[:500] if error_message else None,  # 限制错误信息长度
+            execution_time
+        )
+        
+        db['insert'](sql, params)
+        
+        status_emoji = "✅" if success else "❌"
+        logger.info(
+            f"{status_emoji} 记录设备操作: user={system_user_id}, "
+            f"device={device_type}, action={action}, success={success}"
+        )
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ 保存设备操作记录失败: {e}", exc_info=True)
+        return False
+
+def extract_user_id_from_message(message: str) -> int:
+    """从消息中提取用户ID"""
+    try:
+        if message.startswith("[SYSTEM_USER_ID:"):
+            end_idx = message.find("]")
+            if end_idx > 0:
+                user_id_str = message[16:end_idx]
+                return int(user_id_str)
+    except:
+        pass
+    return 1000000001  # 默认返回admin用户ID
 
 # 注册的代理服务配置
 # 端口分配：
@@ -314,18 +408,35 @@ class DeviceControlArgs(BaseModel):
 @tool("control_device", args_schema=DeviceControlArgs, description="控制智能设备")
 def control_device(device_type: str, action: str, parameters: Dict[str, Any] = None):
     """统一的设备控制接口"""
+    start_time = time.time()
+    
     try:
         if parameters is None:
             parameters = {}
             
         if device_type not in REGISTERED_AGENTS:
-            return json.dumps({
+            error_result = {
                 "error": f"设备类型 {device_type} 不支持",
                 "supported_types": list(REGISTERED_AGENTS.keys())
-            }, indent=2, ensure_ascii=False)
+            }
+            
+            # 记录失败操作
+            save_device_operation(
+                system_user_id=1000000001,  # 使用默认admin用户ID
+                device_type=device_type,
+                device_name=None,
+                action=action,
+                parameters=parameters,
+                success=False,
+                error_message=f"不支持的设备类型: {device_type}",
+                execution_time=int((time.time() - start_time) * 1000)
+            )
+            
+            return json.dumps(error_result, indent=2, ensure_ascii=False)
         
         agent_config = REGISTERED_AGENTS[device_type]
         agent_url = agent_config["url"]
+        device_name = agent_config["name"]
         
         # 构建命令
         command = f"{action}"
@@ -336,7 +447,9 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         # 调用 A2A agent 执行实际控制 (现在是同步函数，会在线程中运行)
         result = call_a2a_agent(agent_url, command)
         
+        execution_time = int((time.time() - start_time) * 1000)
         success = result.get("success", False)
+        
         if success:
             content = result.get("content", "")
             
@@ -347,44 +460,114 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     content_json = json.loads(content)
                     if isinstance(content_json, dict) and "error" in content_json:
                         # 子agent返回了错误，视为操作失败
-                        logger.error(f"{agent_config['name']} 操作失败: {content_json.get('error')}")
+                        error_msg = content_json.get('error')
+                        logger.error(f"{device_name} 操作失败: {error_msg}")
+                        
+                        # 记录失败操作
+                        save_device_operation(
+                            system_user_id=1000000001,
+                            device_type=device_type,
+                            device_name=device_name,
+                            action=action,
+                            parameters=parameters,
+                            success=False,
+                            response=content[:1000],
+                            error_message=error_msg,
+                            execution_time=execution_time
+                        )
+                        
                         return json.dumps({
-                            "message": f"{agent_config['name']} 操作失败",
+                            "message": f"{device_name} 操作失败",
                             "device_type": device_type,
-                            "device_name": agent_config["name"],
+                            "device_name": device_name,
                             "action": action,
                             "parameters": parameters,
                             "command": command,
                             "status": "failed",
-                            "error": content_json.get("error"),
+                            "error": error_msg,
                             "details": content_json.get("message", "")
                         }, indent=2, ensure_ascii=False)
                 except (json.JSONDecodeError, ValueError):
                     # 不是JSON格式，直接返回文本内容
                     pass
                 
+                # 记录成功操作
+                save_device_operation(
+                    system_user_id=1000000001,
+                    device_type=device_type,
+                    device_name=device_name,
+                    action=action,
+                    parameters=parameters,
+                    success=True,
+                    response=content[:1000],
+                    execution_time=execution_time
+                )
+                
                 # 正常返回内容
                 return content
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
-                return f"成功控制 {agent_config['name']}：{action}"
+                success_msg = f"成功控制 {device_name}：{action}"
+                
+                # 记录成功操作
+                save_device_operation(
+                    system_user_id=1000000001,
+                    device_type=device_type,
+                    device_name=device_name,
+                    action=action,
+                    parameters=parameters,
+                    success=True,
+                    response=success_msg,
+                    execution_time=execution_time
+                )
+                
+                return success_msg
         else:
-            logger.error(f"控制 {agent_config['name']} 失败: {result.get('error')}")
+            error_msg = result.get("error", "未知错误")
+            logger.error(f"控制 {device_name} 失败: {error_msg}")
+            
+            # 记录失败操作
+            save_device_operation(
+                system_user_id=1000000001,
+                device_type=device_type,
+                device_name=device_name,
+                action=action,
+                parameters=parameters,
+                success=False,
+                error_message=error_msg,
+                execution_time=execution_time
+            )
+            
             return json.dumps({
-                "message": f"控制 {agent_config['name']} 失败",
+                "message": f"控制 {device_name} 失败",
                 "device_type": device_type,
-                "device_name": agent_config["name"],
+                "device_name": device_name,
                 "action": action,
                 "parameters": parameters,
                 "command": command,
                 "status": "failed",
-                "error": result.get("error")
+                "error": error_msg
             }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.error(f"设备控制异常: {str(e)}")
+        execution_time = int((time.time() - start_time) * 1000)
+        error_msg = str(e)
+        logger.error(f"设备控制异常: {error_msg}")
+        
+        # 记录异常操作
+        save_device_operation(
+            system_user_id=1000000001,
+            device_type=device_type,
+            device_name=REGISTERED_AGENTS.get(device_type, {}).get("name"),
+            action=action,
+            parameters=parameters,
+            success=False,
+            error_message=error_msg,
+            execution_time=execution_time
+        )
+        
         return json.dumps({
-            "error": str(e),
+            "error": error_msg,
             "message": "设备控制失败"
         }, indent=2, ensure_ascii=False)
 
@@ -586,11 +769,11 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
     try:
         # 导入小米设备连接器
         current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        mcp_dir = os.path.join(current_dir, "mcp")
-        if mcp_dir not in sys.path:
-            sys.path.insert(0, mcp_dir)
+        backend_dir = os.path.join(current_dir, "app", "backend-python")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
         
-        from divice import XiaomiCloudConnector
+        from api.xiaomi_auth import XiaomiCloudConnector
         
         # 1. 创建连接器
         connector = XiaomiCloudConnector(username, password)

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from models.chat import A2ARequest, A2AMessage, A2AMessagePart
 from config import settings
+from services.chat_history_service import chat_history_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,38 @@ class ConductorService:
             "id": self._request_id_counter
         }
     
-    def _extract_content_from_response(self, response: Dict[str, Any]) -> str:
-        """从 A2A 响应中提取内容"""
+    def _extract_content_from_response(self, response: Dict[str, Any]) -> tuple[str, str, bool]:
+        """
+        从 A2A 响应中提取内容
+        
+        Returns:
+            tuple[str, str, bool]: (content, status, is_error)
+                - content: 响应内容
+                - status: 状态 (success, failed, error)
+                - is_error: 是否为错误
+        """
         try:
             result = response.get("result", {})
+            
+            # 先检查任务状态，如果失败直接返回错误
+            status = result.get("status", {})
+            state = status.get("state", "")
+            
+            if state == "failed":
+                # 尝试从错误信息中提取详细错误
+                error_msg = "❌ 任务执行失败"
+                
+                # 从history中查找错误信息
+                history = result.get("history", [])
+                for item in reversed(history):
+                    if item.get("role") == "agent":
+                        for part in item.get("parts", []):
+                            if text := part.get("text"):
+                                if "错误" in text or "失败" in text or "error" in text.lower():
+                                    error_msg = text
+                                    break
+                
+                return error_msg, "failed", True
             
             # 1. 从 artifacts 提取
             artifacts = result.get("artifacts", [])
@@ -64,7 +93,7 @@ class ConductorService:
                         if text := part.get("text"):
                             contents.append(text)
                 if contents:
-                    return "\n\n".join(contents)
+                    return "\n\n".join(contents), "success", False
             
             # 2. 从 history 提取 agent 回复
             history = result.get("history", [])
@@ -76,22 +105,18 @@ class ConductorService:
                             agent_messages.append(text)
             
             if agent_messages:
-                return "\n\n".join(agent_messages)
+                return "\n\n".join(agent_messages), "success", False
             
-            # 3. 检查任务状态
-            status = result.get("status", {})
-            state = status.get("state", "")
+            # 3. 如果已完成但没有内容
             if state == "completed":
-                return "✅ 任务已完成"
-            elif state == "failed":
-                return "❌ 任务执行失败"
+                return "✅ 任务已完成", "success", False
             
             # 4. 默认返回
-            return "已收到响应"
+            return "已收到响应", "success", False
             
         except Exception as e:
             logger.error(f"提取响应内容失败: {e}", exc_info=True)
-            return "处理响应时出错"
+            return f"处理响应时出错: {str(e)}", "error", True
     
     async def send_message(self, user_message: str, system_user_id: int, context_id: str) -> Dict[str, Any]:
         """
@@ -105,6 +130,15 @@ class ConductorService:
         Returns:
             包含响应内容的字典
         """
+        # 先保存用户消息到数据库
+        await chat_history_service.save_message(
+            system_user_id=system_user_id,
+            context_id=context_id,
+            role="user",
+            content=user_message,
+            status="success"
+        )
+        
         try:
             # 构建请求（注入用户ID）
             request_data = self._build_a2a_request(user_message, system_user_id, context_id)
@@ -127,13 +161,33 @@ class ConductorService:
             # 递增请求ID
             self._request_id_counter += 1
             
-            # 提取内容
-            content = self._extract_content_from_response(response_data)
+            # 提取内容（带错误检测）
+            content, msg_status, is_error = self._extract_content_from_response(response_data)
             
             # 提取任务ID和上下文ID
             result = response_data.get("result", {})
             task_id = result.get("id")
             response_context_id = result.get("contextId", context_id)
+            
+            # 保存agent响应到数据库
+            await chat_history_service.save_message(
+                system_user_id=system_user_id,
+                context_id=response_context_id,
+                role="agent",
+                content=content,
+                task_id=task_id,
+                status=msg_status,
+                error_message=content if is_error else None
+            )
+            
+            # 如果是错误，返回错误状态
+            if is_error:
+                return {
+                    "content": content,
+                    "context_id": response_context_id,
+                    "task_id": task_id,
+                    "status": msg_status  # failed 或 error
+                }
             
             return {
                 "content": content,
@@ -142,21 +196,69 @@ class ConductorService:
                 "status": "success"
             }
             
-        except httpx.TimeoutException:
-            logger.error("请求 Conductor Agent 超时")
-            raise Exception("请求超时，Agent 可能正在处理复杂任务")
+        except httpx.TimeoutException as e:
+            error_msg = "⏱️ 请求超时，Agent 可能正在处理复杂任务"
+            logger.error(error_msg)
+            
+            # 保存错误消息到数据库
+            await chat_history_service.save_message(
+                system_user_id=system_user_id,
+                context_id=context_id,
+                role="system",
+                content=error_msg,
+                status="error",
+                error_message=str(e)
+            )
+            
+            raise Exception(error_msg)
         
-        except httpx.ConnectError:
-            logger.error(f"无法连接到 Conductor Agent: {self.base_url}")
-            raise Exception(f"无法连接到 Conductor Agent，请确保服务已启动 ({self.base_url})")
+        except httpx.ConnectError as e:
+            error_msg = f"🔌 无法连接到 Conductor Agent，请确保服务已启动 ({self.base_url})"
+            logger.error(error_msg)
+            
+            # 保存错误消息到数据库
+            await chat_history_service.save_message(
+                system_user_id=system_user_id,
+                context_id=context_id,
+                role="system",
+                content=error_msg,
+                status="error",
+                error_message=str(e)
+            )
+            
+            raise Exception(error_msg)
         
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP 错误: {e.response.status_code}")
-            raise Exception(f"Agent 返回错误: {e.response.status_code}")
+            error_msg = f"❌ Agent 返回错误: {e.response.status_code}"
+            logger.error(error_msg)
+            
+            # 保存错误消息到数据库
+            await chat_history_service.save_message(
+                system_user_id=system_user_id,
+                context_id=context_id,
+                role="system",
+                content=error_msg,
+                status="error",
+                error_message=str(e)
+            )
+            
+            raise Exception(error_msg)
         
         except Exception as e:
-            logger.error(f"发送消息失败: {e}", exc_info=True)
-            raise Exception(f"发送消息失败: {str(e)}")
+            error_msg = f"💥 发送消息失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            # 保存错误消息到数据库
+            await chat_history_service.save_message(
+                system_user_id=system_user_id,
+                context_id=context_id,
+                role="system",
+                content=error_msg,
+                status="error",
+                error_message=str(e)
+            )
+            
+            raise Exception(error_msg)
     
     async def test_connection(self) -> bool:
         """测试与 Conductor Agent 的连接"""

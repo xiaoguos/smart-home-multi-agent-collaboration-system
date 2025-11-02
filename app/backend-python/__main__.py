@@ -15,6 +15,7 @@ from api.chat import router as chat_router
 from api.config import router as config_router
 from api.xiaomi_auth import router as xiaomi_router
 from api.auth import router as auth_router
+from api.conversation import router as conversation_router
 from config import settings
 from database import init_database, DatabaseConnectionError
 
@@ -57,6 +58,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
+app.include_router(conversation_router, prefix="/api/v1", tags=["Conversation"])
 app.include_router(config_router, prefix="/api/v1/config", tags=["Config"])
 app.include_router(xiaomi_router, prefix="/api/v1/xiaomi", tags=["Xiaomi Auth"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])

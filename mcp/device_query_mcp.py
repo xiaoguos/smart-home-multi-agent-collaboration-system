@@ -15,9 +15,10 @@ from pathlib import Path
 import pymysql
 from pymysql.cursors import DictCursor
 
-# 导入 divice.py 中的核心类
-sys.path.append(os.path.dirname(__file__))
-from divice import XiaomiCloudConnector
+# 导入 XiaomiCloudConnector 类
+backend_path = os.path.join(os.path.dirname(__file__), '..', 'app', 'backend-python')
+sys.path.insert(0, backend_path)
+from api.xiaomi_auth import XiaomiCloudConnector
 
 # 配置日志（MCP 模式下减少日志输出）
 if "--stdio" not in sys.argv and "mcp" not in sys.argv[0].lower():
