@@ -191,10 +191,6 @@ const Chat: React.FC = () => {
           }));
         
         setMessages(historyMessages);
-        
-        if (historyMessages.length > 0) {
-          message.success(`已加载 ${historyMessages.length} 条历史消息`);
-        }
       } else {
         setMessages([]);
       }
@@ -508,7 +504,7 @@ const Chat: React.FC = () => {
   ];
 
   return (
-    <div className="chat-container" style={{ display: 'flex', height: '100%' }}>
+    <div className="chat-container">
       {/* 对话列表侧边栏 */}
       <Drawer
         title={
@@ -606,17 +602,10 @@ const Chat: React.FC = () => {
       </Drawer>
 
       {/* 主聊天区域 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <div className="chat-main">
         {/* 当前对话标题栏 */}
         {currentConversation && (
-          <div style={{ 
-            padding: '12px 16px', 
-            borderBottom: '1px solid #f0f0f0',
-            backgroundColor: '#fafafa',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
+          <div className="chat-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <MessageOutlined style={{ color: '#1890ff' }} />
               <Text strong style={{ fontSize: 16 }}>
@@ -631,7 +620,7 @@ const Chat: React.FC = () => {
         
         {/* 小米账号绑定提示 */}
         {!checkingBinding && !isBound && (
-          <div style={{ padding: "16px 16px 0" }}>
+          <div style={{ padding: "16px 16px 0", flexShrink: 0 }}>
             <Alert
               message="需要绑定小米账号"
               description="要使用智能家居控制功能，请先绑定您的小米账号。"
@@ -647,29 +636,32 @@ const Chat: React.FC = () => {
           </div>
         )}
         
-        <div className="chat-messages" ref={messagesContainerRef} style={{ flex: 1, overflow: 'auto' }}>
+        {/* 消息区域 - 可滚动 */}
+        <div className="chat-messages" ref={messagesContainerRef}>
           <Bubble.List
             autoScroll={true}
             items={bubbleItems}
             roles={roles}
           />
         </div>
+        
+        {/* 输入区域 - 固定在底部 */}
         <div className="chat-input-container">
-        {!drawerOpen && (
-          <Button
-            type="primary"
-            icon={<MessageOutlined />}
-            onClick={() => {
-              setDrawerOpen(true);
-              loadConversations(false); // 打开抽屉时加载对话列表
-            }}
-            style={{
-              marginBottom: 16,
-            }}
-          >
-            对话列表
-          </Button>
-        )}
+          {!drawerOpen && (
+            <Button
+              type="primary"
+              icon={<MessageOutlined />}
+              onClick={() => {
+                setDrawerOpen(true);
+                loadConversations(false);
+              }}
+              style={{
+                marginBottom: 16,
+              }}
+            >
+              对话列表
+            </Button>
+          )}
           <Sender
             className="chat-input"
             loading={loading}
