@@ -24,16 +24,20 @@ class AirConditionerAgent:
     
     # 默认系统提示词（备用）
     DEFAULT_SYSTEM_PROMPT = (
-        '你是一个专门的家庭空调控制助手。'
-        '你的唯一目的是帮助用户控制他们的家庭空调系统。'
-        '你可以帮助调节温度、设置模式（制冷、制热、送风等）、'
-        '打开或关闭空调，以及提供节能建议。'
-        '如果用户询问与空调控制或相关主题无关的内容，'
-        '请礼貌地说明你无法帮助处理该主题，只能协助处理与空调相关的问题。'
-        '不要尝试回答无关问题或将工具用于其他目的。'
+        '你是一个专门的家庭智能设备管理助手。'
+        '你的主要功能包括：1）控制空调系统；2）查询和管理用户的米家智能设备。'
+        '\n\n## 设备查询功能'
+        '当用户询问"我有哪些设备"、"列出设备"、"设备列表"等问题时，必须调用 list_devices 工具获取所有米家设备信息。'
+        '**重要**: 调用 list_devices 时必须传入 system_user_id 参数，当前用户为 admin，系统ID为 1000000001。'
+        '该工具会自动从数据库读取用户的米家账户凭证，无需用户输入账号密码。'
+        '如果工具返回"未查询到绑定米家账户的Token"，请友好地告知用户需要先绑定米家账户。'
+        '如果工具返回"请先开启设备查询MCP"，请告知用户MCP服务未启动。'
+        '\n\n## 空调控制功能'
+        '你可以帮助调节温度、设置模式（制冷、制热、送风等）、打开或关闭空调，以及提供节能建议。'
         '当用户请求查询设备状态时，一定要调用工具 get_ac_status 获取最新状态，并将结果直接返回给用户；如工具返回 JSON，请原样返回或提取关键字段用中文概述。'
         '当用户请求"启动/打开/关闭空调"等同义表达时，必须调用 set_ac_power(power: bool) 工具执行，并向用户反馈执行结果。'
         '当用户请求设置温度（如"调到26度/设置到23℃"）时，必须调用 set_ac_temperature(temperature: int) 工具执行；如用户未给出明确温度，先向用户确认目标温度（范围16-30℃）。'
+        '\n\n## 智能温度调节'
         '当用户以语义描述温感（如"有点热/太热/冷一点/暖一点/舒服点/睡觉用"）而未给出具体温度时，按以下规则自动设置人类适宜温度：'
         '1) 先调用 get_ac_status 获取当前 power、mode、tar_temp；若电源关闭且需要调温，先调用 set_ac_power(true)。'
         '2) 若 mode 为 制冷/自动 且用户表达"有点热/太热/降温/冷一点"，将目标温度在当前基础上降低1-2℃（默认2℃），不低于24℃；若表达"有点冷/太冷/升温/暖一点"，则提高1-2℃（默认2℃），不高于30℃，然后调用 set_ac_temperature。'
@@ -41,6 +45,7 @@ class AirConditionerAgent:
         '4) 若用户表达"舒适/舒服点"，则：制冷模式设为26℃，制热模式设为22℃；若无法判断模式，则先查询状态后按模式执行。'
         '5) 若用户表达"睡觉/睡眠"，则：制冷模式设为27℃，制热模式设为21℃。'
         '所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。'
+        '\n\n如果用户询问与智能设备管理或空调控制无关的内容，请礼貌地说明你只能协助处理智能设备相关的问题。'
     )
 
     def __init__(self):
@@ -59,9 +64,11 @@ class AirConditionerAgent:
             )
             
             # 加载系统提示词
-            system_prompt = config_loader.get_agent_prompt('air_conditioner')
-            logger.info("✅ 成功加载Air Conditioner系统提示词")
-            self.SYSTEM_PROMPT = system_prompt
+            try:
+                system_prompt = config_loader.get_agent_prompt('air_conditioner')
+                self.SYSTEM_PROMPT = system_prompt
+            except Exception as e:
+                self.SYSTEM_PROMPT = self.DEFAULT_SYSTEM_PROMPT
             
         except Exception as e:
             logger.error(f"❌ 配置加载失败: {e}")
@@ -71,7 +78,8 @@ class AirConditionerAgent:
             logger.error("   3. config.yaml 中的数据库连接配置正确")
             raise SystemExit(1) from e
         
-        self.tools = [get_ac_status,set_ac_power,set_ac_temperature]
+        from tools import list_devices
+        self.tools = [get_ac_status, set_ac_power, set_ac_temperature, list_devices]
 
         self.graph = create_react_agent(
             self.model,

@@ -26,8 +26,11 @@ class ConductorService:
         """生成消息 ID"""
         return f"msg-{uuid4().hex[:16]}"
     
-    def _build_a2a_request(self, user_message: str, context_id: str) -> Dict[str, Any]:
+    def _build_a2a_request(self, user_message: str, system_user_id: int, context_id: str) -> Dict[str, Any]:
         """构建 A2A 协议请求"""
+        # 在消息中注入用户ID，让 Agent 知道当前用户
+        message_with_user_id = f"[SYSTEM_USER_ID:{system_user_id}] {user_message}"
+        
         return {
             "jsonrpc": "2.0",
             "method": "message/send",
@@ -38,7 +41,7 @@ class ConductorService:
                     "parts": [
                         {
                             "kind": "text",
-                            "text": user_message
+                            "text": message_with_user_id
                         }
                     ],
                     "message_id": self._generate_message_id()
@@ -90,20 +93,21 @@ class ConductorService:
             logger.error(f"提取响应内容失败: {e}", exc_info=True)
             return "处理响应时出错"
     
-    async def send_message(self, user_message: str, context_id: str) -> Dict[str, Any]:
+    async def send_message(self, user_message: str, system_user_id: int, context_id: str) -> Dict[str, Any]:
         """
         发送消息到 Conductor Agent
         
         Args:
             user_message: 用户消息
+            system_user_id: 系统用户ID
             context_id: 会话上下文ID
             
         Returns:
             包含响应内容的字典
         """
         try:
-            # 构建请求
-            request_data = self._build_a2a_request(user_message, context_id)
+            # 构建请求（注入用户ID）
+            request_data = self._build_a2a_request(user_message, system_user_id, context_id)
             
             logger.info(f"📤 发送消息到 Conductor Agent: {user_message[:50]}...")
             

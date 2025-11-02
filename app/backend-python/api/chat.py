@@ -26,11 +26,12 @@ async def chat(request: ChatRequest):
         # 如果没有提供 context_id，生成一个新的
         context_id = request.context_id or f"session-{uuid4().hex[:16]}"
         
-        logger.info(f"💬 收到聊天请求: {request.query[:50]}... (context: {context_id})")
+        logger.info(f"💬 收到聊天请求: {request.query[:50]}... (user: {request.system_user_id}, context: {context_id})")
         
-        # 调用 Conductor Agent
+        # 调用 Conductor Agent（传递用户ID）
         result = await conductor_service.send_message(
             user_message=request.query,
+            system_user_id=request.system_user_id,
             context_id=context_id
         )
         

@@ -113,8 +113,21 @@ const Chat: React.FC = () => {
       };
       setMessages((prev) => [...prev, userMsg]);
 
+      // 从 localStorage 获取用户 ID
+      const userStr = localStorage.getItem('user_info');
+      if (!userStr) {
+        throw new Error('未找到用户信息，请重新登录');
+      }
+      const user = JSON.parse(userStr);
+      const systemUserId = user.id;
+
       // 通过 FastAPI 后端发送
-      const response = await sendChatMessage(userMessage, contextId.current, abortControllerRef.current.signal);
+      const response = await sendChatMessage(
+        userMessage, 
+        systemUserId, 
+        contextId.current, 
+        abortControllerRef.current.signal
+      );
       const content = response.content;
       // 更新 context_id（如果后端返回了新的）
       if (response.context_id) {

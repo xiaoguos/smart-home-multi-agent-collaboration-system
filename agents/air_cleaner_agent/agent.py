@@ -71,7 +71,6 @@ class AirPurifierAgent:
             
             # 加载AI模型配置
             ai_config = config_loader.get_default_ai_model_config()
-            logger.info(f"✅ 成功加载AI模型配置: {ai_config['model']}")
             self.model = ChatOpenAI(
                 model=ai_config['model'],
                 openai_api_key=ai_config['api_key'],
@@ -81,7 +80,6 @@ class AirPurifierAgent:
             
             # 加载系统提示词
             system_prompt = config_loader.get_agent_prompt('air_cleaner')
-            logger.info("✅ 成功加载Air Cleaner系统提示词")
             self.SYSTEM_PROMPT = system_prompt
             
         except Exception as e:

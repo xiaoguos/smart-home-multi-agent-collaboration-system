@@ -13,6 +13,7 @@ USE smart_home;
 -- ============================================
 CREATE TABLE IF NOT EXISTS ai_model_config (
     id BIGINT NOT NULL COMMENT '配置ID',
+    system_user_id BIGINT COMMENT '系统用户ID，NULL表示全局配置',
     model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
     provider VARCHAR(50) NOT NULL COMMENT '提供商: deepseek, openai, baidu',
     api_key VARCHAR(500) NOT NULL COMMENT 'API密钥',
@@ -38,9 +39,10 @@ PROPERTIES (
 -- 插入 AI 模型配置数据
 -- ============================================
 
--- DeepSeek 模型（默认，手动指定ID）
+-- DeepSeek 模型（全局默认配置）
 INSERT INTO ai_model_config (
     id,
+    system_user_id,
     model_name, 
     provider, 
     api_key, 
@@ -54,6 +56,7 @@ INSERT INTO ai_model_config (
     updated_at
 ) VALUES (
     1,
+    NULL,  -- NULL表示全局配置，适用于所有用户
     'deepseek-chat',
     'deepseek',
     'sk-0f603ccc4af94854ac560c59f223b1d5',
@@ -67,10 +70,11 @@ INSERT INTO ai_model_config (
     NOW()
 );
 
--- OpenAI 模型（备用，默认禁用，手动指定ID）
+-- OpenAI 模型（备用，默认禁用）
 -- 如需使用，请修改 api_key 并将 is_active 设为 TRUE
 INSERT INTO ai_model_config (
     id,
+    system_user_id,
     model_name, 
     provider, 
     api_key, 
@@ -84,6 +88,7 @@ INSERT INTO ai_model_config (
     updated_at
 ) VALUES (
     2,
+    NULL,  -- NULL表示全局配置
     'gpt-3.5-turbo',
     'openai',
     'your-openai-api-key',
@@ -97,10 +102,11 @@ INSERT INTO ai_model_config (
     NOW()
 );
 
--- GPT-4 模型（备用，默认禁用，手动指定ID）
+-- GPT-4 模型（备用，默认禁用）
 -- 如需使用，请修改 api_key 并将 is_active 设为 TRUE
 INSERT INTO ai_model_config (
     id,
+    system_user_id,
     model_name, 
     provider, 
     api_key, 
@@ -114,6 +120,7 @@ INSERT INTO ai_model_config (
     updated_at
 ) VALUES (
     3,
+    NULL,  -- NULL表示全局配置
     'gpt-4',
     'openai',
     'your-openai-api-key',
@@ -126,3 +133,20 @@ INSERT INTO ai_model_config (
     NOW(),
     NOW()
 );
+
+-- ============================================
+-- 使用说明
+-- ============================================
+-- 1. system_user_id 为 NULL 的配置为全局配置，适用于所有用户
+-- 2. system_user_id 有值的配置为用户专属配置，优先级高于全局配置
+-- 3. 查询时优先使用用户专属配置，如无则使用全局配置
+-- 
+-- 示例：为 admin 用户（ID=1000000001）添加专属配置
+-- INSERT INTO ai_model_config (
+--     id, system_user_id, model_name, provider, api_key, api_base,
+--     model_type, temperature, max_tokens, is_default, is_active,
+--     created_at, updated_at
+-- ) VALUES (
+--     4, 1000000001, 'deepseek-chat', 'deepseek', 'user-specific-key',
+--     'https://api.deepseek.com', 'chat', 0.0, 2048, TRUE, TRUE, NOW(), NOW()
+-- );
