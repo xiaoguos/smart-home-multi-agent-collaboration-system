@@ -93,14 +93,13 @@ const Chat: React.FC = () => {
   };
 
   // 加载对话列表
-  const loadConversations = async () => {
+  const loadConversations = async (autoSelectFirst: boolean = false) => {
     try {
       setConversationsLoading(true);
       const userId = getUserId();
       
-      // 如果没有用户ID，创建临时对话
       if (!userId) {
-        createTemporaryConversation();
+        message.warning("未找到用户信息");
         return;
       }
       
@@ -110,48 +109,28 @@ const Chat: React.FC = () => {
         only_active: true
       });
       
+      // 直接设置对话列表，不做其他操作
       setConversations(response.data);
       
-      // 如果对话列表为空，创建临时对话
-      if (response.data.length === 0) {
-        createTemporaryConversation();
-      } else if (!currentConversation && !isTemporaryConversation) {
-        // 如果有对话列表但没有当前对话（且不是临时对话），选择第一个
+      // 只在明确要求时才自动选择第一个
+      if (autoSelectFirst && response.data.length > 0 && !currentConversation) {
         await switchConversation(response.data[0]);
       }
     } catch (error) {
       console.error("加载对话列表失败:", error);
-      // 加载失败时也创建临时对话
-      createTemporaryConversation();
+      message.error("加载对话列表失败");
     } finally {
       setConversationsLoading(false);
     }
   };
   
-  // 创建临时对话（前端临时，不存数据库）
+  // 创建新对话（清空当前对话，准备开始新的对话）
   const createTemporaryConversation = () => {
-    const tempContextId = `temp-${Date.now()}`;
-    contextId.current = tempContextId;
+    // 清空 context_id，下次发送消息时后端会创建新对话
+    contextId.current = "";
     setIsTemporaryConversation(true);
     setMessages([]); // 清空消息
-    
-    // 创建临时对话对象，添加到列表顶部显示
-    const tempConversation: Conversation = {
-      id: Date.now(),
-      context_id: tempContextId,
-      system_user_id: getUserId() || 0, // 临时对话不需要真实用户ID
-      title: "新对话",
-      description: undefined,
-      message_count: 0,
-      last_message: undefined,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      is_active: true
-    };
-    
-    // 将临时对话添加到列表顶部
-    setConversations(prev => [tempConversation, ...prev.filter(c => !c.context_id.startsWith('temp-'))]);
-    setCurrentConversation(tempConversation);
+    setCurrentConversation(null); // 清空当前对话
   };
 
   // 创建新对话（临时的，不存数据库）
@@ -169,62 +148,65 @@ const Chat: React.FC = () => {
   // 切换对话
   const switchConversation = async (conversation: Conversation) => {
     try {
-      setCurrentConversation(conversation);
-      contextId.current = conversation.context_id;
-      setIsTemporaryConversation(conversation.context_id.startsWith('temp-')); // 根据 context_id 判断是否临时对话
+      const targetContextId = conversation.context_id;
       
-      // 如果是临时对话，清空消息列表即可
-      if (conversation.context_id.startsWith('temp-')) {
-        setMessages([]);
-        return;
-      }
+      // 关闭抽屉
+      setDrawerOpen(false);
       
-      // 加载历史消息
       const userId = getUserId();
       if (!userId) {
-        message.error("未找到用户信息，无法加载历史消息");
+        message.error("未找到用户信息");
         setMessages([]);
         return;
       }
       
-      const response = await getConversationHistory(conversation.context_id, {
+      // 1. 刷新对话列表，获取最新的对话元数据
+      const listResponse = await getConversationList({
+        system_user_id: userId,
+        limit: 50,
+        only_active: true
+      });
+      setConversations(listResponse.data);
+      
+      // 从最新列表中找到当前对话
+      const updatedConversation = listResponse.data.find(c => c.context_id === targetContextId);
+      setCurrentConversation(updatedConversation || conversation);
+      contextId.current = targetContextId;
+      setIsTemporaryConversation(false);
+      
+      // 2. 加载对话的历史消息
+      const historyResponse = await getConversationHistory(targetContextId, {
         system_user_id: userId,
         limit: 100
       });
       
-      // 转换为 Message 格式
-      const historyMessages: Message[] = response.data
-        .filter(msg => msg.role === 'user' || msg.role === 'agent')
-        .map((msg, index) => ({
-          key: index,
-          role: msg.role === 'agent' ? 'ai' : 'user',
-          content: msg.content
-        }));
-      
-      setMessages(historyMessages);
+      // 转换并显示历史消息
+      if (historyResponse.data && Array.isArray(historyResponse.data)) {
+        const historyMessages: Message[] = historyResponse.data
+          .filter(msg => msg.role === 'user' || msg.role === 'agent')
+          .map((msg, index) => ({
+            key: index,
+            role: msg.role === 'agent' ? 'ai' : 'user',
+            content: msg.content
+          }));
+        
+        setMessages(historyMessages);
+        
+        if (historyMessages.length > 0) {
+          message.success(`已加载 ${historyMessages.length} 条历史消息`);
+        }
+      } else {
+        setMessages([]);
+      }
     } catch (error) {
       console.error("切换对话失败:", error);
       message.error("加载对话历史失败");
+      setMessages([]);
     }
   };
 
   // 删除对话
   const handleDeleteConversation = async (conversation: Conversation) => {
-    // 如果是临时对话，直接从前端删除，不调用后端API
-    if (conversation.context_id.startsWith('temp-')) {
-      // 从列表中移除临时对话
-      setConversations(prev => prev.filter(c => c.context_id !== conversation.context_id));
-      
-      // 如果删除的是当前对话，创建新的临时对话
-      if (currentConversation?.context_id === conversation.context_id) {
-        createTemporaryConversation();
-      }
-      
-      message.success("删除临时对话成功");
-      return;
-    }
-    
-    // 删除数据库中的对话
     Modal.confirm({
       title: '确认删除',
       content: `确定要删除对话"${conversation.title}"吗？`,
@@ -262,24 +244,6 @@ const Chat: React.FC = () => {
   // 编辑对话标题
   const handleSaveTitle = async (conversationId: string) => {
     try {
-      // 如果是临时对话，只在前端更新标题
-      if (conversationId.startsWith('temp-')) {
-        setConversations(prev => prev.map(c => 
-          c.context_id === conversationId 
-            ? { ...c, title: editingTitle }
-            : c
-        ));
-        
-        // 如果是当前对话，也更新当前对话的标题
-        if (currentConversation?.context_id === conversationId) {
-          setCurrentConversation(prev => prev ? { ...prev, title: editingTitle } : null);
-        }
-        
-        setEditingConversationId(null);
-        message.success("修改标题成功");
-        return;
-      }
-      
       // 更新数据库中的对话标题
       await updateConversation({
         context_id: conversationId,
@@ -322,9 +286,39 @@ const Chat: React.FC = () => {
     checkBinding();
   }, []);
 
-  // 初始化时加载对话列表
+  // 初始化时加载对话列表，选择最近的对话或创建新对话
   useEffect(() => {
-    loadConversations();
+    const initConversations = async () => {
+      const userId = getUserId();
+      
+      if (!userId) {
+        createTemporaryConversation();
+        return;
+      }
+      
+      try {
+        const response = await getConversationList({
+          system_user_id: userId,
+          limit: 50,
+          only_active: true
+        });
+        
+        setConversations(response.data);
+        
+        if (response.data.length > 0) {
+          // 有对话记录，选择最近的一个（第一个）
+          const latestConversation = response.data[0];
+          await switchConversation(latestConversation);
+        } else {
+          // 没有对话记录，创建临时对话
+          createTemporaryConversation();
+        }
+      } catch (error) {
+        createTemporaryConversation();
+      }
+    };
+    
+    initConversations();
   }, []);
 
   // 复制消息内容
@@ -382,40 +376,23 @@ const Chat: React.FC = () => {
       if (response.context_id) {
         contextId.current = response.context_id;
         
-        // 如果是临时对话，发送第一条消息后自动刷新对话列表
+        // 如果是临时对话，发送第一条消息后转为正式对话
         if (isTemporaryConversation) {
           const newContextId = response.context_id;
           setIsTemporaryConversation(false);
           
-          // 延迟刷新，确保后端已经创建了对话记录
+          // 延迟500ms后重新加载对话列表，确保后端已经创建了对话记录
           setTimeout(async () => {
-            // 移除临时对话
-            setConversations(prev => prev.filter(c => !c.context_id.startsWith('temp-')));
+            await loadConversations(false);
             
-            // 重新加载对话列表
-            try {
-              const userId = getUserId();
-              if (!userId) {
-                console.error("刷新对话列表失败: 未找到用户信息");
-                return;
-              }
-              
-              const response = await getConversationList({
-                system_user_id: userId,
-                limit: 50,
-                only_active: true
-              });
-              
-              setConversations(response.data);
-              
-              // 找到新创建的对话并切换过去
-              const newConv = response.data.find(c => c.context_id === newContextId);
+            // 从新加载的列表中找到这个对话并更新当前对话
+            setConversations(prev => {
+              const newConv = prev.find(c => c.context_id === newContextId);
               if (newConv) {
                 setCurrentConversation(newConv);
               }
-            } catch (error) {
-              console.error("刷新对话列表失败:", error);
-            }
+              return prev;
+            });
           }, 500);
         }
       }
@@ -607,14 +584,7 @@ const Chat: React.FC = () => {
                         size="small"
                       />
                     ) : (
-                      <Text strong>
-                    {conv.title}
-                    {conv.context_id.startsWith('temp-') && (
-                      <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
-                        (未保存)
-                      </Text>
-                    )}
-                  </Text>
+                      <Text strong>{conv.title}</Text>
                     )
                   }
                   description={
@@ -637,6 +607,28 @@ const Chat: React.FC = () => {
 
       {/* 主聊天区域 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        {/* 当前对话标题栏 */}
+        {currentConversation && (
+          <div style={{ 
+            padding: '12px 16px', 
+            borderBottom: '1px solid #f0f0f0',
+            backgroundColor: '#fafafa',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MessageOutlined style={{ color: '#1890ff' }} />
+              <Text strong style={{ fontSize: 16 }}>
+                {currentConversation.title}
+              </Text>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {currentConversation.message_count} 条消息
+            </Text>
+          </div>
+        )}
+        
         {/* 小米账号绑定提示 */}
         {!checkingBinding && !isBound && (
           <div style={{ padding: "16px 16px 0" }}>
@@ -667,7 +659,10 @@ const Chat: React.FC = () => {
           <Button
             type="primary"
             icon={<MessageOutlined />}
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => {
+              setDrawerOpen(true);
+              loadConversations(false); // 打开抽屉时加载对话列表
+            }}
             style={{
               marginBottom: 16,
             }}

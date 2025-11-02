@@ -130,7 +130,7 @@ class ConductorService:
         Returns:
             包含响应内容的字典
         """
-        # 先保存用户消息到数据库
+        # 先保存用户消息到数据库（保存原始用户消息，不带系统前缀）
         await chat_history_service.save_message(
             system_user_id=system_user_id,
             context_id=context_id,
@@ -138,6 +138,7 @@ class ConductorService:
             content=user_message,
             status="success"
         )
+        logger.info(f"💾 已保存用户消息: context={context_id}, content={user_message[:50]}...")
         
         try:
             # 构建请求（注入用户ID）
@@ -179,6 +180,7 @@ class ConductorService:
                 status=msg_status,
                 error_message=content if is_error else None
             )
+            logger.info(f"💾 已保存Agent回复: context={response_context_id}, content={content[:50]}...")
             
             # 如果是错误，返回错误状态
             if is_error:
