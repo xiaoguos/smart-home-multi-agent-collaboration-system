@@ -351,18 +351,22 @@
     font-weight: 500
     
   .ant-input, .ant-input-password
-    background: rgba(255, 255, 255, 0.1)
-    border: 1px solid rgba(255, 255, 255, 0.2)
+    background: rgba(255, 255, 255, 0.1) !important
     border-radius: 8px
-    color: #ffffff
-    
-    &::placeholder
-      color: rgba(255, 255, 255, 0.6)
+    color: #ffffff !important
+
       
-    &:focus, &:hover
-      background: rgba(255, 255, 255, 0.15)
-      border-color: #1890ff
-      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2)
+  // 针对 Input 组件内部的 input 元素
+  .ant-input-affix-wrapper
+    background: rgba(255, 255, 255, 0.1) !important
+    border-radius: 8px
+    
+    input
+      background: transparent !important
+      color: #ffffff !important
+      
+      &::placeholder
+        color: rgba(255, 255, 255, 0.6) !important
       
   .ant-input-prefix
     color: rgba(255, 255, 255, 0.6)
