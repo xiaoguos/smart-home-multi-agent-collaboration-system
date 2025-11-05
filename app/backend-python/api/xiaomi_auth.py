@@ -1,8 +1,3 @@
-"""
-小米账号认证 API
-提供小米账号登录、验证码处理、双因素认证等功能
-"""
-
 import logging
 import uuid
 import base64
@@ -986,44 +981,129 @@ async def check_binding_status(system_user_id: int):
     需要传入 system_user_id 参数
     """
     try:
-        # 查询该用户最新的绑定记录
-        sql = """
-            SELECT xiaomi_username, created_at 
-            FROM xiaomi_credentials 
+        logger.info(f"🔍 检查用户 {system_user_id} 的绑定状态")
+        
+        # 先查询该用户的所有绑定记录（调试用）
+        debug_sql = """
+            SELECT id, system_user_id, xiaomi_username, is_active, created_at, updated_at
+            FROM xiaomi_account 
             WHERE system_user_id = %s
-            ORDER BY created_at DESC 
+            ORDER BY updated_at DESC 
+        """
+        debug_result = query(debug_sql, (system_user_id,))
+        logger.info(f"🔍 该用户所有绑定记录: {debug_result}")
+        
+        # 查询该用户最新的激活绑定记录
+        sql = """
+            SELECT xiaomi_username, created_at, is_active
+            FROM xiaomi_account 
+            WHERE system_user_id = %s AND is_active = 1
+            ORDER BY updated_at DESC 
             LIMIT 1
         """
         result = query(sql, (system_user_id,))
         
+        logger.info(f"📊 带 is_active=1 条件的查询结果: {result}")
+        
+        # 如果带 is_active 条件查不到，尝试不带条件
+        if not result or len(result) == 0:
+            logger.warning(f"⚠️ 带 is_active=1 条件查询失败，尝试不带条件查询")
+            sql_no_active = """
+                SELECT xiaomi_username, created_at, is_active
+                FROM xiaomi_account 
+                WHERE system_user_id = %s
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            """
+            result = query(sql_no_active, (system_user_id,))
+            logger.info(f"📊 不带 is_active 条件的查询结果: {result}")
+        
         if result and len(result) > 0:
+            logger.info(f"✅ 找到绑定账号: {result[0]['xiaomi_username']}, is_active={result[0].get('is_active')}")
             return BindingStatusResponse(
                 is_bound=True,
                 username=result[0]["xiaomi_username"],
                 bound_at=str(result[0]["created_at"])
             )
         
+        logger.error(f"❌ 完全未找到绑定账号，system_user_id={system_user_id}")
         return BindingStatusResponse(is_bound=False)
         
     except Exception as e:
-        logger.error(f"check_binding_status error: {e}")
+        logger.error(f"❌ check_binding_status error: {e}", exc_info=True)
         return BindingStatusResponse(is_bound=False)
 
 
 @router.get("/devices")
 async def get_xiaomi_devices(system_user_id: int, server: str = "cn"):
     """
-    获取用户的米家设备列表
+    获取用户的米家设备列表（通过 MCP 服务）
     需要传入 system_user_id 参数
     返回所有家庭的所有设备信息
     """
     try:
-        # 查询用户凭证
+        # 导入 MCP 设备服务
+        from services.mcp_device_service import get_mcp_device_service
+        
+        logger.info(f"📡 通过 MCP 服务获取用户 {system_user_id} 的设备列表")
+        
+        # 获取 MCP 服务实例
+        mcp_service = get_mcp_device_service()
+        
+        # 调用 MCP 服务获取设备
+        result = await mcp_service.get_user_devices(system_user_id, server)
+        
+        # 检查 MCP 服务是否可用
+        if result is None:
+            logger.error("❌ MCP 服务返回 None")
+            raise HTTPException(
+                status_code=503, 
+                detail="❌ 设备查询MCP服务不可用"
+            )
+        
+        # 检查是否成功
+        if not result.get("success"):
+            error_message = result.get("message", "获取设备失败")
+            
+            # 如果是MCP服务相关的错误，返回503状态码
+            if "MCP" in error_message or "未部署" in error_message or "未安装" in error_message:
+                raise HTTPException(status_code=503, detail=error_message)
+            
+            # 其他错误（如未绑定账号）返回400状态码
+            raise HTTPException(status_code=400, detail=error_message)
+        
+        # 转换为旧格式以保持 API 兼容性
+        return {
+            "code": 0,
+            "message": "success",
+            "result": {
+                "server": result.get("server", server),
+                "total_homes": result.get("total_homes", 0),
+                "total_devices": result.get("total_devices", 0),
+                "homes": result.get("homes", []),
+                "devices": result.get("devices", [])
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"get_xiaomi_devices error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取设备列表失败: {str(e)}")
+
+
+async def get_xiaomi_devices_legacy(system_user_id: int, server: str = "cn"):
+    """
+    获取用户的米家设备列表（传统方式，作为备用）
+    直接调用小米云 API
+    """
+    try:
+        # 查询用户的激活凭证
         sql = """
             SELECT service_token, ssecurity, xiaomi_user_id, server
-            FROM xiaomi_credentials 
-            WHERE system_user_id = %s
-            ORDER BY created_at DESC 
+            FROM xiaomi_account 
+            WHERE system_user_id = %s AND is_active = 1
+            ORDER BY updated_at DESC 
             LIMIT 1
         """
         result = query(sql, (system_user_id,))
@@ -1105,7 +1185,7 @@ async def get_xiaomi_devices(system_user_id: int, server: str = "cn"):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"get_xiaomi_devices error: {e}", exc_info=True)
+        logger.error(f"get_xiaomi_devices_legacy error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取设备列表失败: {str(e)}")
 
 
@@ -1171,11 +1251,11 @@ async def save_xiaomi_credentials(system_user_id: int, xiaomi_username: str,
                                    service_token: str, ssecurity: str, 
                                    xiaomi_user_id: str, server: str):
     """
-    保存小米账号凭证到数据库
+    保存小米账号凭证到 xiaomi_account 表
     一个系统用户只能绑定一个小米账号
     
-    MySQL: 使用 REPLACE INTO 确保唯一性（删除旧记录并插入新记录）
-    StarRocks: DUPLICATE KEY 表直接插入，查询时取最新的
+    MySQL: 先禁用旧账号（is_active=0），再插入新账号（is_active=1）
+    StarRocks: DUPLICATE KEY 表不支持 UPDATE，直接插入新记录，查询时取最新的激活记录
     """
     try:
         import time
@@ -1185,25 +1265,31 @@ async def save_xiaomi_credentials(system_user_id: int, xiaomi_username: str,
         db_type = get_db_type()
         
         if db_type == 'mysql':
-            # MySQL: 使用 REPLACE INTO 确保一个用户只能绑定一个小米账号
-            # REPLACE INTO 会先删除具有相同唯一键的旧记录，然后插入新记录
-            # 注意：MySQL 表中有 UNIQUE KEY uk_system_user_id(system_user_id)
-            replace_sql = """
-                REPLACE INTO xiaomi_credentials 
-                (system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+            # MySQL: 先将该用户的所有旧账号设置为未激活
+            update_sql = """
+                UPDATE xiaomi_account 
+                SET is_active = 0 
+                WHERE system_user_id = %s
             """
-            insert(replace_sql, (system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server))
+            insert(update_sql, (system_user_id,))
+            
+            # 然后插入新的激活账号
+            insert_sql = """
+                INSERT INTO xiaomi_account 
+                (system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
+            """
+            insert(insert_sql, (system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server))
             logger.info(f"[MySQL] 用户 {system_user_id} 成功绑定小米账号: {xiaomi_username}")
             
         else:  # starrocks 或其他
-            # StarRocks: DUPLICATE KEY 表不支持 REPLACE/UPDATE
-            # 直接插入新记录，查询时取最新的（通过 ORDER BY created_at DESC LIMIT 1）
+            # StarRocks: DUPLICATE KEY 表不支持 UPDATE
+            # 直接插入新记录（is_active=1），查询时取最新的激活记录
             credential_id = int(time.time() * 1000) + random.randint(1000, 9999)
             insert_sql = """
-                INSERT INTO xiaomi_credentials 
-                (id, system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                INSERT INTO xiaomi_account 
+                (id, system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 1, NOW(), NOW())
             """
             insert(insert_sql, (credential_id, system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server))
             logger.info(f"[StarRocks] 用户 {system_user_id} 成功绑定小米账号: {xiaomi_username}")

@@ -47,11 +47,9 @@ def main(host, port):
         if host is None or port is None:
             from config_loader import get_config_loader
             config_loader = get_config_loader(strict_mode=False)
-            default_host, default_port = config_loader.get_agent_host_port('air_conditioner')
+            default_host,             default_port = config_loader.get_agent_host_port('air_conditioner')
             host = host or default_host
             port = port or default_port
-        
-        logger.info(f"📍 Air Conditioner Agent 启动配置: {host}:{port}")
         
         capabilities = AgentCapabilities(
             push_notifications=False,

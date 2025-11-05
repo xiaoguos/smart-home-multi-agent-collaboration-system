@@ -255,15 +255,14 @@ const About: React.FC = () => {
         {/* 开发路线图 */}
         <section className="roadmap-section">
           <Title level={2} className="section-title">
-            <Timeline /> 开发路线图
+            <RobotOutlined /> 开发路线图
           </Title>
-          <Timeline>
-            {roadmap.map((item, index) => (
-              <Timeline.Item
-                key={index}
-                color={item.status === "计划中" ? "blue" : "green"}
-                label={item.version}
-              >
+          <Timeline
+            items={roadmap.map((item, index) => ({
+              key: index,
+              color: item.status === "计划中" ? "blue" : "green",
+              label: item.version,
+              children: (
                 <Card size="small" className="roadmap-card">
                   <div className="roadmap-header">
                     <Title level={4} className="roadmap-version">
@@ -279,9 +278,9 @@ const About: React.FC = () => {
                     ))}
                   </ul>
                 </Card>
-              </Timeline.Item>
-            ))}
-          </Timeline>
+              ),
+            }))}
+          />
         </section>
 
         <Divider />

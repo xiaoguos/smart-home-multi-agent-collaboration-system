@@ -48,11 +48,9 @@ def main(host, port, debug_mode):
         if host is None or port is None:
             from config_loader import get_config_loader
             config_loader = get_config_loader(strict_mode=False)
-            default_host, default_port = config_loader.get_agent_host_port('conductor')
+            default_host,             default_port = config_loader.get_agent_host_port('conductor')
             host = host or default_host
             port = port or default_port
-        
-        logger.info(f"📍 Conductor Agent 启动配置: {host}:{port}")
         
         capabilities = AgentCapabilities(
             push_notifications=False,
@@ -105,9 +103,6 @@ def main(host, port, debug_mode):
         
         if is_debugging:
             # PyCharm Debug 模式：使用兼容的方式启动
-            logger.info(f"🐛 Starting in DEBUG mode on {host}:{port}")
-            logger.info("使用 uvicorn.Config + uvicorn.Server 方式（兼容 PyCharm debugger）")
-            
             import asyncio
             config = uvicorn.Config(
                 server.build(), 
@@ -119,7 +114,6 @@ def main(host, port, debug_mode):
             asyncio.run(server_instance.serve())
         else:
             # 正常模式：使用标准方式
-            logger.info(f"🚀 Starting in NORMAL mode on {host}:{port}")
             uvicorn.run(server.build(), host=host, port=port)
         # --8<-- [end:DefaultRequestHandler]
 
