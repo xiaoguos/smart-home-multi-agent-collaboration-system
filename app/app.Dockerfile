@@ -1,5 +1,3 @@
-# Moss AI H5 前端应用 Dockerfile
-# Multi-stage build for optimized production image
 
 # 第一阶段: 构建前端应用
 FROM node:20-alpine AS builder
