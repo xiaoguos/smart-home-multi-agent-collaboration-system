@@ -1,0 +1,68 @@
+# 依赖目录
+node_modules
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 构建输出
+dist
+dist-ssr
+*.local
+
+# 开发工具
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 测试
+coverage
+.nyc_output
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker
+*.Dockerfile
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Tauri (桌面应用相关，H5不需要)
+src-tauri
+target
+
+# 日志
+logs
+*.log
+
+# 临时文件
+tmp
+temp
+*.tmp
+
+# 文档
+README.md
+*.md
+
+# Python 后端相关
+backend-python
+backend-cangjie
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+

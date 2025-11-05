@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库服务
+  mysql:
+    image: mysql:8.0
+    container_name: moss-ai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-moss_ai_2024}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-moss_ai}
+      MYSQL_USER: ${MYSQL_USER:-moss}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-moss123456}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-db:/docker-entrypoint-initdb.d  # 初始化脚本目录
+    networks:
+      - moss-ai-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-moss_ai_2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Python 后端服务
+  backend:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: moss-ai-backend
+    ports:
+      - "3000:3000"  # 后端 API 端口
+    environment:
+      # 数据库配置
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${MYSQL_DATABASE:-moss_ai}
+      - DB_USER=${MYSQL_USER:-moss}
+      - DB_PASSWORD=${MYSQL_PASSWORD:-moss123456}
+      # 服务配置
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DEBUG=false
+      - ENVIRONMENT=production
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro  # 挂载配置文件（只读）
+      - backend-logs:/app/logs  # 日志目录
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - moss-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # H5 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: app.Dockerfile
+    container_name: moss-ai-frontend
+    ports:
+      - "8080:80"  # 映射到主机的 8080 端口
+    environment:
+      # 后端 API 地址
+      - VITE_BACKEND_URL=http://localhost:3000
+      - BACKEND_URL=http://backend:3000  # Nginx 代理使用
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - moss-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+    driver: local
+  backend-logs:
+    driver: local
+
+networks:
+  moss-ai-network:
+    driver: bridge
+
