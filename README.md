@@ -261,10 +261,20 @@ docker build -f app.Dockerfile -t moss-ai-app:latest .
 
 ### backend构建
 ```bash
+
 # 进入到app目录
 cd moss-ai/app/backend-python
+
 # 执行build命令
 docker build -f backend.Dockerfile -t moss-ai-backend:latest .
+
+# 构建后执行启动
+docker run -d \
+  --name moss-ai-app \
+  -p 8080:80 \
+  -e VITE_BACKEND_URL=http://your-backend-url:port \
+  --restart unless-stopped \
+  moss-ai-app:latest
 ```
 
 ## 🤝 贡献指南
