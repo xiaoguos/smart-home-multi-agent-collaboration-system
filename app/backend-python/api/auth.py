@@ -198,10 +198,18 @@ async def login(data: UserLoginRequest):
         # 生成token
         token = generate_token(user["id"])
         
-        # 检查是否绑定小米账号
-        xiaomi_check_sql = "SELECT id FROM xiaomi_credentials WHERE system_user_id = %s"
+        # 检查是否绑定小米账号（先试带 is_active=1 的条件）
+        xiaomi_check_sql = "SELECT id, xiaomi_username, is_active FROM xiaomi_account WHERE system_user_id = %s AND is_active = 1"
         xiaomi_result = query(xiaomi_check_sql, (user["id"],))
         xiaomi_bound = len(xiaomi_result) > 0
+        logger.info(f"🔍 用户 {user['id']} 绑定检查 (is_active=1): {xiaomi_result}, xiaomi_bound={xiaomi_bound}")
+        
+        # 如果查不到，尝试不带 is_active 条件
+        if not xiaomi_bound:
+            xiaomi_check_sql_no_active = "SELECT id, xiaomi_username, is_active FROM xiaomi_account WHERE system_user_id = %s ORDER BY updated_at DESC LIMIT 1"
+            xiaomi_result_no_active = query(xiaomi_check_sql_no_active, (user["id"],))
+            xiaomi_bound = len(xiaomi_result_no_active) > 0
+            logger.info(f"🔍 用户 {user['id']} 绑定检查 (不带is_active): {xiaomi_result_no_active}, xiaomi_bound={xiaomi_bound}")
         
         # 返回用户信息
         user_info = UserResponse(

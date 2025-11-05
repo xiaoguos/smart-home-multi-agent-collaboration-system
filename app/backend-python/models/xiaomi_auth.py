@@ -1,15 +1,8 @@
-"""
-小米认证相关数据模型
-"""
-
 from typing import Optional
 from pydantic import BaseModel, Field
 
-
-# ==================== 请求模型 ====================
-
+# 小米登录请求
 class XiaomiLoginRequest(BaseModel):
-    """小米登录请求"""
     system_user_id: int = Field(..., description="系统用户ID")
     username: str = Field(..., description="小米账号（手机号/邮箱）")
     password: str = Field(..., description="密码")
@@ -25,21 +18,18 @@ class XiaomiLoginRequest(BaseModel):
             }
         }
 
-
+# 验证码提交请求
 class CaptchaSubmitRequest(BaseModel):
-    """验证码提交请求"""
     session_id: str = Field(..., description="会话ID")
     captcha_code: str = Field(..., description="验证码")
 
-
+# 双因素认证请求
 class TwoFactorAuthRequest(BaseModel):
-    """双因素认证请交"""
     session_id: str = Field(..., description="会话ID")
     ticket: str = Field(..., description="2FA验证码")
 
-
+# 手动输入凭证请求
 class ManualCredentialsRequest(BaseModel):
-    """手动输入凭证请求"""
     system_user_id: int = Field(..., description="系统用户ID")
     xiaomi_username: str = Field(..., description="小米账号")
     ssecurity: str = Field(..., description="_ssecurity参数")
@@ -61,11 +51,8 @@ class ManualCredentialsRequest(BaseModel):
             }
         }
 
-
-# ==================== 响应模型 ====================
-
+# 登录步骤响应
 class LoginStepResponse(BaseModel):
-    """登录步骤响应"""
     session_id: str = Field(..., description="会话ID")
     status: str = Field(..., description="状态: success, need_captcha, need_2fa, error")
     message: str = Field(..., description="提示消息")
@@ -83,16 +70,14 @@ class LoginStepResponse(BaseModel):
             }
         }
 
-
+# 绑定状态响应
 class BindingStatusResponse(BaseModel):
-    """绑定状态响应"""
     is_bound: bool = Field(..., description="是否已绑定")
     username: Optional[str] = Field(None, description="绑定的小米账号")
     bound_at: Optional[str] = Field(None, description="绑定时间")
 
-
+# 小米设备信息
 class XiaomiDeviceInfo(BaseModel):
-    """小米设备信息"""
     name: str
     did: str
     token: Optional[str] = None

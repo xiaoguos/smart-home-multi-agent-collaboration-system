@@ -96,19 +96,22 @@ PROPERTIES (
 );
 
 -- ============================================
--- 6. 小米账号配置表
+-- 6. 小米账号配置表（合并了 xiaomi_account 和 xiaomi_credentials）
 -- ============================================
 CREATE TABLE IF NOT EXISTS xiaomi_account (
-    id BIGINT NOT NULL COMMENT '账号ID',
-    username VARCHAR(50) NOT NULL COMMENT '小米账号（手机号）',
-    password VARCHAR(500) NOT NULL COMMENT '账号密码',
-    region VARCHAR(10) COMMENT '区域: cn, de, us, ru, tw, sg, i2',
-    is_default BOOLEAN COMMENT '是否为默认账号',
+    id BIGINT NOT NULL COMMENT '主键ID',
+    system_user_id BIGINT NOT NULL COMMENT '系统用户ID',
+    xiaomi_username VARCHAR(100) NOT NULL COMMENT '小米账号（手机号/邮箱）',
+    password VARCHAR(500) COMMENT '账号密码（可选，用于重新登录）',
+    service_token VARCHAR(1000) COMMENT '服务令牌',
+    ssecurity VARCHAR(255) COMMENT '安全令牌',
+    xiaomi_user_id VARCHAR(100) COMMENT '小米用户ID',
+    server VARCHAR(10) COMMENT '服务器区域: cn, de, us, ru, tw, sg, in, i2',
     is_active BOOLEAN COMMENT '是否启用',
     created_at DATETIME COMMENT '创建时间',
     updated_at DATETIME COMMENT '更新时间'
 ) ENGINE=OLAP
-PRIMARY KEY(id)
+DUPLICATE KEY(id, system_user_id)
 DISTRIBUTED BY HASH(id) BUCKETS 10
 PROPERTIES (
     "replication_num" = "1"
@@ -170,10 +173,14 @@ INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, creat
 - 获取用户洞察：使用 get_user_insights 工具
 - **场景智能分析**：使用 query_data_mining_agent 工具（重要！）
 
-小米设备信息管理：
-- 获取小米设备信息：使用 get_xiaomi_devices 工具
-  需要提供：username（小米账号）、password（密码）、server（服务器区域，默认cn）
-  返回：所有小米设备的详细信息，包括Token、IP、MAC等
+## 米家设备信息管理（重要更新）：
+**当用户询问"我有哪些设备"、"设备列表"、"米家设备"时，必须使用 list_xiaomi_devices 工具**
+
+- 获取米家设备列表：使用 list_xiaomi_devices 工具
+  - 参数：system_user_id（系统用户ID，默认1）、server（服务器区域，默认cn）
+  - **重要**：此工具会自动从数据库读取用户的米家账户凭证，**绝对不要要求用户提供账号密码**
+  - 如果工具返回"未查询到绑定的米家账户"，告知用户需要先通过后端API绑定
+  - 返回：所有米家设备的详细信息，包括Token、IP、MAC等
 
 设备控制指南：
 当用户说"开启空调"、"打开空调"、"关闭空调"等命令时，使用 control_device 工具：
@@ -214,24 +221,9 @@ INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, creat
   4. 向用户说明："根据通用最佳实践，建议...（随着您使用次数增多，我会学习您的个人习惯）"
   5. 根据通用建议执行设备控制
 
-**完整场景示例**：
-用户说："我要睡觉了" → 
-  情况A（有历史数据）：
-    1. 调用 query_data_mining_agent("我要睡觉了")
-    2. 返回："根据您的历史习惯，睡觉时空调26°C、床头灯10%亮度"
-    3. 执行个性化设置
-  
-  情况B（无历史数据）：
-    1. 调用 query_data_mining_agent("我要睡觉了")
-    2. 返回："暂无足够历史数据"
-    3. 调用 search_baidu_ai("人类最适合的睡觉温度和灯光设置")
-    4. 返回："根据睡眠医学，建议26-28°C、极低亮度暖光"
-    5. 向用户说明这是通用建议，并执行设置
-    6. 提示："我会记住这次设置，下次为您提供更个性化的建议"
-
 始终以中文回复用户，提供清晰、友好的服务。
 如果用户的需求超出了你的能力范围，请礼貌地说明并提供相关建议。
-消息返回请使用Markdown', 'v1.0', TRUE, NOW(), NOW());
+消息返回请使用Markdown格式。', 'v1.0', TRUE, NOW(), NOW());
 
 -- 插入Air Conditioner Agent的系统提示词
 INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
@@ -335,7 +327,8 @@ INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, creat
 INSERT INTO device_config (id, device_code, device_name, device_type, agent_code, ip_address, token, model, is_active, created_at, updated_at) VALUES
 (1, 'ac_001', '客厅空调', 'air_conditioner', 'air_conditioner', '192.200.1.12', '1724bf8d57b355173dfa08ae23367f86', 'lumi.acpartner.mcn02', TRUE, NOW(), NOW());
 
--- 插入小米账号配置（注意：实际使用时应该加密密码，手动指定ID）
-INSERT INTO xiaomi_account (id, username, password, region, is_default, is_active, created_at, updated_at) VALUES
-(1, '13716858579', 'WDep@26056', 'cn', TRUE, TRUE, NOW(), NOW());
+-- 插入小米账号配置示例（注意：实际使用时应该加密密码）
+-- 注意：实际数据应通过 API 接口添加，这里仅作为示例
+-- INSERT INTO xiaomi_account (id, system_user_id, xiaomi_username, password, server, is_active, created_at, updated_at) VALUES
+-- (1, 1, '13716858579', 'your_password', 'cn', TRUE, NOW(), NOW());
 SHOW PROC '/backends'

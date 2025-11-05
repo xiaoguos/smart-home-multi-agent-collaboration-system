@@ -53,11 +53,9 @@ export class HttpClient {
     // 请求拦截器
     this.instance.interceptors.request.use(
       (config) => {
-        console.log('📤 发送请求:', config.method?.toUpperCase(), config.url);
         return config;
       },
       (error) => {
-        console.error('❌ 请求错误:', error);
         return Promise.reject(error);
       }
     );
@@ -65,11 +63,9 @@ export class HttpClient {
     // 响应拦截器
     this.instance.interceptors.response.use(
       (response) => {
-        console.log('📥 收到响应:', response.status, response.config.url);
         return response;
       },
       (error) => {
-        console.error('❌ 响应错误:', error.message);
         return Promise.reject(error);
       }
     );

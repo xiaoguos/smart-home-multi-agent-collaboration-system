@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 import json
 from pydantic import BaseModel, Field
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -11,12 +11,106 @@ import httpx
 from a2a.client import ClientFactory, A2ACardResolver
 from a2a.types import Message, Part
 from a2a.client.client import ClientConfig
+import sys
+import os
+import time
+import random
+
+# 添加父目录到路径以导入database
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'app', 'backend-python'))
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
+
+# 延迟导入database模块，避免循环依赖
+_db_module = None
+def get_db():
+    """延迟加载数据库模块"""
+    global _db_module
+    if _db_module is None:
+        try:
+            from database import insert
+            _db_module = {'insert': insert}
+            logger.info("✅ 数据库模块加载成功")
+        except Exception as e:
+            logger.warning(f"⚠️ 数据库模块加载失败（将跳过数据库记录）: {e}")
+            _db_module = {'insert': None}
+    return _db_module
+
+def save_device_operation(
+    system_user_id: int,
+    device_type: str,
+    action: str,
+    success: bool,
+    context_id: Optional[str] = None,
+    device_name: Optional[str] = None,
+    parameters: Optional[Dict[str, Any]] = None,
+    response: Optional[str] = None,
+    error_message: Optional[str] = None,
+    execution_time: Optional[int] = None
+):
+    """
+    保存设备操作记录到数据库（同步版本）
+    
+    注意：这是一个同步函数，会在工具调用时直接执行
+    """
+    try:
+        db = get_db()
+        if db['insert'] is None:
+            logger.debug("数据库未加载，跳过记录")
+            return False
+        
+        op_id = int(time.time() * 1000000) + random.randint(1000, 9999)
+        parameters_json = json.dumps(parameters, ensure_ascii=False) if parameters else None
+        
+        sql = """
+            INSERT INTO device_operations 
+            (id, system_user_id, context_id, device_type, device_name, action, 
+             parameters, success, response, error_message, execution_time, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """
+        
+        params = (
+            op_id,
+            system_user_id,
+            context_id,
+            device_type,
+            device_name,
+            action,
+            parameters_json,
+            success,
+            response[:1000] if response else None,  # 限制响应长度
+            error_message[:500] if error_message else None,  # 限制错误信息长度
+            execution_time
+        )
+        
+        db['insert'](sql, params)
+        
+        status_emoji = "✅" if success else "❌"
+        logger.info(
+            f"{status_emoji} 记录设备操作: user={system_user_id}, "
+            f"device={device_type}, action={action}, success={success}"
+        )
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ 保存设备操作记录失败: {e}", exc_info=True)
+        return False
+
+def extract_user_id_from_message(message: str) -> int:
+    """从消息中提取用户ID"""
+    try:
+        if message.startswith("[SYSTEM_USER_ID:"):
+            end_idx = message.find("]")
+            if end_idx > 0:
+                user_id_str = message[16:end_idx]
+                return int(user_id_str)
+    except:
+        pass
+    return 1000000001  # 默认返回admin用户ID
 
 # 注册的代理服务配置
 # 端口分配：
@@ -81,15 +175,11 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
     Returns:
         包含 agent 响应的字典
     """
-    logger.info(f"开始调用 A2A agent: {agent_url}, 命令: {command}")
-    
     try:
         async with httpx.AsyncClient(timeout=timeout) as httpx_client:
-            logger.info(f"正在获取 agent 卡片: {agent_url}")
             # 获取 agent 卡片
             resolver = A2ACardResolver(httpx_client=httpx_client, base_url=agent_url)
             agent_card = await resolver.get_agent_card()
-            logger.info(f"成功获取 agent 卡片: {agent_card.name}")
             
             # 创建客户端配置
             config = ClientConfig(
@@ -104,7 +194,6 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             # 创建客户端
             factory = ClientFactory(config=config)
             client = factory.create(card=agent_card)
-            logger.info("客户端创建成功，准备发送消息")
             
             # 创建消息
             message = Message(
@@ -115,12 +204,10 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             )
             
             # 发送消息并收集响应
-            logger.info("开始发送消息并等待响应...")
             responses = []
             final_content = ""
             
             async for response in client.send_message(message):
-                logger.info(f"收到响应: {type(response)}")
                 
                 # 提取实际的文本内容
                 if hasattr(response, 'artifacts') and response.artifacts:
@@ -149,7 +236,6 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
                 else:
                     responses.append(str(response))
             
-            logger.info(f"成功收集 {len(responses)} 个响应，提取的文本内容长度: {len(final_content)}")
             return {
                 "success": True,
                 "content": final_content,  # 只返回文本内容
@@ -229,8 +315,6 @@ def execute_agent_command(agent_id: str, command: str):
         agent_config = REGISTERED_AGENTS[agent_id]
         agent_url = agent_config["url"]
         
-        logger.info(f"执行代理命令: agent_id={agent_id}, command={command}")
-        
         # 调用 A2A agent (现在是同步函数，会在线程中运行)
         result = call_a2a_agent(agent_url, command)
         
@@ -259,7 +343,6 @@ def execute_agent_command(agent_id: str, command: str):
                     pass
                 
                 # 正常返回内容
-                logger.info(f"成功调用 {agent_config['name']}")
                 return content
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
@@ -325,18 +408,35 @@ class DeviceControlArgs(BaseModel):
 @tool("control_device", args_schema=DeviceControlArgs, description="控制智能设备")
 def control_device(device_type: str, action: str, parameters: Dict[str, Any] = None):
     """统一的设备控制接口"""
+    start_time = time.time()
+    
     try:
         if parameters is None:
             parameters = {}
             
         if device_type not in REGISTERED_AGENTS:
-            return json.dumps({
+            error_result = {
                 "error": f"设备类型 {device_type} 不支持",
                 "supported_types": list(REGISTERED_AGENTS.keys())
-            }, indent=2, ensure_ascii=False)
+            }
+            
+            # 记录失败操作
+            save_device_operation(
+                system_user_id=1000000001,  # 使用默认admin用户ID
+                device_type=device_type,
+                device_name=None,
+                action=action,
+                parameters=parameters,
+                success=False,
+                error_message=f"不支持的设备类型: {device_type}",
+                execution_time=int((time.time() - start_time) * 1000)
+            )
+            
+            return json.dumps(error_result, indent=2, ensure_ascii=False)
         
         agent_config = REGISTERED_AGENTS[device_type]
         agent_url = agent_config["url"]
+        device_name = agent_config["name"]
         
         # 构建命令
         command = f"{action}"
@@ -344,12 +444,12 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
             param_str = ", ".join([f"{k}={v}" for k, v in parameters.items()])
             command += f" ({param_str})"
         
-        logger.info(f"控制设备: device_type={device_type}, command={command}")
-        
         # 调用 A2A agent 执行实际控制 (现在是同步函数，会在线程中运行)
         result = call_a2a_agent(agent_url, command)
         
+        execution_time = int((time.time() - start_time) * 1000)
         success = result.get("success", False)
+        
         if success:
             content = result.get("content", "")
             
@@ -360,45 +460,114 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     content_json = json.loads(content)
                     if isinstance(content_json, dict) and "error" in content_json:
                         # 子agent返回了错误，视为操作失败
-                        logger.error(f"{agent_config['name']} 操作失败: {content_json.get('error')}")
+                        error_msg = content_json.get('error')
+                        logger.error(f"{device_name} 操作失败: {error_msg}")
+                        
+                        # 记录失败操作
+                        save_device_operation(
+                            system_user_id=1000000001,
+                            device_type=device_type,
+                            device_name=device_name,
+                            action=action,
+                            parameters=parameters,
+                            success=False,
+                            response=content[:1000],
+                            error_message=error_msg,
+                            execution_time=execution_time
+                        )
+                        
                         return json.dumps({
-                            "message": f"{agent_config['name']} 操作失败",
+                            "message": f"{device_name} 操作失败",
                             "device_type": device_type,
-                            "device_name": agent_config["name"],
+                            "device_name": device_name,
                             "action": action,
                             "parameters": parameters,
                             "command": command,
                             "status": "failed",
-                            "error": content_json.get("error"),
+                            "error": error_msg,
                             "details": content_json.get("message", "")
                         }, indent=2, ensure_ascii=False)
                 except (json.JSONDecodeError, ValueError):
                     # 不是JSON格式，直接返回文本内容
                     pass
                 
+                # 记录成功操作
+                save_device_operation(
+                    system_user_id=1000000001,
+                    device_type=device_type,
+                    device_name=device_name,
+                    action=action,
+                    parameters=parameters,
+                    success=True,
+                    response=content[:1000],
+                    execution_time=execution_time
+                )
+                
                 # 正常返回内容
-                logger.info(f"成功控制 {agent_config['name']}")
                 return content
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
-                return f"成功控制 {agent_config['name']}：{action}"
+                success_msg = f"成功控制 {device_name}：{action}"
+                
+                # 记录成功操作
+                save_device_operation(
+                    system_user_id=1000000001,
+                    device_type=device_type,
+                    device_name=device_name,
+                    action=action,
+                    parameters=parameters,
+                    success=True,
+                    response=success_msg,
+                    execution_time=execution_time
+                )
+                
+                return success_msg
         else:
-            logger.error(f"控制 {agent_config['name']} 失败: {result.get('error')}")
+            error_msg = result.get("error", "未知错误")
+            logger.error(f"控制 {device_name} 失败: {error_msg}")
+            
+            # 记录失败操作
+            save_device_operation(
+                system_user_id=1000000001,
+                device_type=device_type,
+                device_name=device_name,
+                action=action,
+                parameters=parameters,
+                success=False,
+                error_message=error_msg,
+                execution_time=execution_time
+            )
+            
             return json.dumps({
-                "message": f"控制 {agent_config['name']} 失败",
+                "message": f"控制 {device_name} 失败",
                 "device_type": device_type,
-                "device_name": agent_config["name"],
+                "device_name": device_name,
                 "action": action,
                 "parameters": parameters,
                 "command": command,
                 "status": "failed",
-                "error": result.get("error")
+                "error": error_msg
             }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.error(f"设备控制异常: {str(e)}")
+        execution_time = int((time.time() - start_time) * 1000)
+        error_msg = str(e)
+        logger.error(f"设备控制异常: {error_msg}")
+        
+        # 记录异常操作
+        save_device_operation(
+            system_user_id=1000000001,
+            device_type=device_type,
+            device_name=REGISTERED_AGENTS.get(device_type, {}).get("name"),
+            action=action,
+            parameters=parameters,
+            success=False,
+            error_message=error_msg,
+            execution_time=execution_time
+        )
+        
         return json.dumps({
-            "error": str(e),
+            "error": error_msg,
             "message": "设备控制失败"
         }, indent=2, ensure_ascii=False)
 
@@ -533,7 +702,6 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
     try:
         agent_config = REGISTERED_AGENTS.get("data_mining")
         if not agent_config:
-            logger.warning("⚠️  数据挖掘代理未配置")
             return json.dumps({
                 "success": False,
                 "message": "⚠️  数据挖掘代理未配置（可选功能），建议使用通用建议",
@@ -545,13 +713,10 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
         # 构建完整的查询
         full_query = f"{query} (用户ID: {user_id})"
         
-        logger.info(f"调用数据挖掘代理: query={query} (用户ID: {user_id})")
-        
         # 调用数据挖掘代理
         result = call_a2a_agent(agent_url, full_query, timeout=90.0)
         
         if result.get("success"):
-            logger.info("✅ 数据挖掘代理调用成功")
             # 直接返回数据挖掘agent的内容
             content = result.get("content", "")
             if content:
@@ -562,7 +727,6 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
             error_msg = result.get("error", "未知错误")
             # 判断是否是连接错误（服务未启动）
             if "connection" in error_msg.lower() or "503" in error_msg:
-                logger.warning(f"⚠️  数据挖掘代理服务未启动（端口{agent_url}），这是可选功能，不影响设备控制")
                 return json.dumps({
                     "success": False,
                     "message": "⚠️  暂无历史数据（数据挖掘代理未启动）",
@@ -587,7 +751,6 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
                 }, indent=2, ensure_ascii=False)
         
     except Exception as e:
-        logger.warning(f"⚠️  调用数据挖掘代理异常: {str(e)}（不影响设备控制）")
         return json.dumps({
             "success": False,
             "message": "⚠️  暂无历史数据分析（数据挖掘服务不可用）",
@@ -606,13 +769,11 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
     try:
         # 导入小米设备连接器
         current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        mcp_dir = os.path.join(current_dir, "mcp")
-        if mcp_dir not in sys.path:
-            sys.path.insert(0, mcp_dir)
+        backend_dir = os.path.join(current_dir, "app", "backend-python")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
         
-        from divice import XiaomiCloudConnector
-        
-        logger.info(f"开始获取小米设备信息: {username}, 服务器: {server}, 跳过登录: {skip_login}")
+        from api.xiaomi_auth import XiaomiCloudConnector
         
         # 1. 创建连接器
         connector = XiaomiCloudConnector(username, password)
@@ -625,10 +786,6 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
                     "success": False,
                     "message": "小米账号登录失败，请检查用户名和密码",
                 }, ensure_ascii=False, indent=2)
-            logger.info("登录成功，开始获取设备列表")
-        else:
-            # 跳过登录，直接使用 divice.py 中的默认 token 和参数
-            logger.info("跳过登录，使用默认参数")
         
         # 2. 获取所有家庭
         all_homes = []
@@ -691,8 +848,6 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
                         
                         all_devices.append(device_data)
         
-        logger.info(f"成功获取 {len(all_devices)} 个设备")
-        
         return json.dumps({
             "success": True,
             "message": f"成功获取设备列表",
@@ -711,37 +866,128 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
         }, ensure_ascii=False, indent=2)
 
 
-class XiaomiDevicesArgs(BaseModel):
-    username: str = Field(..., description="小米账号（邮箱、手机号或用户ID）")
-    password: str = Field(..., description="小米账号密码")
-    server: str = Field(default="cn", description="服务器区域，可选：cn, de, us, ru, tw, sg, in, i2")
-    skip_login: bool = Field(default=False, description="是否跳过登录直接使用默认token")
+# ==================== 旧工具已移除 ====================
+# 注意：旧的 get_xiaomi_devices（需要账号密码）已被移除
+# 现在统一使用下方的 list_xiaomi_devices（自动从数据库获取凭证）
 
 
-@tool("get_xiaomi_devices", args_schema=XiaomiDevicesArgs,
-     description="获取小米智能设备信，一次性完成登录和设备查询")
-def get_xiaomi_devices(username: str, password: str, server: str = "cn", skip_login: bool = False):
+# ==================== 通过MCP自动获取小米设备（无需密码）====================
+
+class ListXiaomiDevicesArgs(BaseModel):
+    system_user_id: int = Field(description="系统用户ID，必须传入当前用户的ID")
+    server: str = Field(default="cn", description="服务器区域，默认cn")
+
+
+@tool("list_xiaomi_devices", args_schema=ListXiaomiDevicesArgs,
+     description="自动从数据库获取用户的米家设备列表，无需提供账号密码。当用户询问'我有哪些设备'、'设备列表'、'米家设备'时使用此工具。必须传入 system_user_id 参数。")
+def list_xiaomi_devices(system_user_id: int, server: str = "cn"):
     """
-    获取小米智能设备信息（包含登录、获取设备列表等完整流程）
+    自动从数据库获取用户的米家设备列表
+    
+    此工具会：
+    1. 从数据库读取用户已保存的米家账户凭证
+    2. 使用凭证通过MCP服务查询设备列表
+    3. 返回所有设备的详细信息
     
     Args:
-        username: 小米账号（邮箱、手机号或用户ID）
-        password: 小米账号密码
-        server: 服务器区域（默认：cn）
-        skip_login: 是否跳过登录，直接使用默认token（默认：False）
+        system_user_id: 系统用户ID，必传
+        server: 服务器区域，默认cn（中国大陆）
     
     Returns:
-        设备列表，包含设备名称、ID、MAC地址、IP地址、Token、型号等
+        设备列表JSON，包含设备名称、型号、IP、Token、在线状态等
+        
+    注意：
+    - 用户需要先通过后端API绑定米家账号
+    - 如果未绑定，会返回友好提示
+    - 无需用户提供账号密码
     """
+    import asyncio
+    import sys
+    import os
+    
     try:
-        logger.info(f"正在获取小米设备信息: {username}, 服务器: {server}, 跳过登录: {skip_login}")
-        # 直接调用获取函数，不使用 MCP
-        return _get_xiaomi_devices_direct(username, password, server, skip_login)
+        # 添加后端路径到 sys.path（复用后端代码）
+        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        backend_path = os.path.join(current_dir, "app", "backend-python")
+        if backend_path not in sys.path:
+            sys.path.insert(0, backend_path)
+        
+        # 导入后端的 MCP 设备服务（复用已有代码）
+        from services.mcp_device_service import get_mcp_device_service
+        
+        # 获取 MCP 服务实例
+        mcp_service = get_mcp_device_service()
+        
+        # 在线程池中运行异步任务，避免事件循环冲突
+        def run_async_task(coro):
+            """在线程池中运行异步任务，避免事件循环冲突"""
+            def _run():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    return loop.run_until_complete(coro)
+                finally:
+                    loop.close()
+            
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_run)
+                return future.result()
+        
+        # 调用后端服务获取设备列表
+        result_data = run_async_task(mcp_service.get_user_devices(system_user_id, server))
+        
+        # 检查返回结果
+        if result_data is None:
+            return json.dumps({
+                "success": False,
+                "message": "设备查询服务不可用，请检查 MCP 服务是否正常运行。"
+            }, ensure_ascii=False, indent=2)
+        
+        # 格式化输出，更友好地展示给用户
+        if result_data.get("success"):
+            total = result_data.get("total_devices", 0)
+            devices = result_data.get("devices", [])
+            
+            if total == 0:
+                return json.dumps({
+                    "success": True,
+                    "message": "您的米家账户中暂无设备",
+                    "total_devices": 0,
+                    "devices": []
+                }, indent=2, ensure_ascii=False)
+            
+            # 构建友好的输出
+            device_list = []
+            for i, device in enumerate(devices, 1):
+                device_info = {
+                    "序号": i,
+                    "设备名称": device.get("name", "未命名"),
+                    "型号": device.get("model", "未知"),
+                    "在线状态": "在线" if device.get("isOnline") else "离线",
+                    "IP地址": device.get("localip", "N/A"),
+                    "Token": device.get("token", "N/A"),
+                    "所属家庭": device.get("home_name", "N/A"),
+                }
+                device_list.append(device_info)
+            
+            return json.dumps({
+                "success": True,
+                "message": f"找到 {total} 个米家设备",
+                "xiaomi_username": result_data.get("xiaomi_username", ""),
+                "server": result_data.get("server", server),
+                "total_devices": total,
+                "devices": device_list
+            }, indent=2, ensure_ascii=False)
+        else:
+            # 直接返回后端服务的错误信息
+            return json.dumps(result_data, ensure_ascii=False, indent=2)
+        
     except Exception as e:
-        logger.error(f"获取小米设备信息失败: {str(e)}")
+        logger.error(f"获取设备列表失败: {e}", exc_info=True)
         return json.dumps({
             "success": False,
-            "message": f"获取设备信息失败: {str(e)}"
+            "message": f"获取设备列表失败: {str(e)}"
         }, ensure_ascii=False, indent=2)
 
 
@@ -775,8 +1021,6 @@ def search_baidu_ai(query: str):
         搜索结果摘要，包含相关的专业建议
     """
     try:
-        logger.info(f"使用百度AI搜索: {query}")
-        
         # 使用httpx进行搜索请求
         # 这里使用百度搜索API或者简化版本的网页搜索
         search_url = "https://www.baidu.com/s"
@@ -800,7 +1044,6 @@ def search_baidu_ai(query: str):
             # 根据常见查询提供智能回复
             suggestions = _get_smart_suggestions(query)
             
-            logger.info(f"百度AI搜索完成: {query}")
             return json.dumps({
                 "success": True,
                 "query": query,
@@ -809,7 +1052,6 @@ def search_baidu_ai(query: str):
                 "note": "以下是基于通用最佳实践的建议，已为您综合整理"
             }, ensure_ascii=False, indent=2)
         else:
-            logger.warning(f"百度搜索请求失败: {response.status_code}")
             # 即使搜索失败，也返回智能建议作为保底
             suggestions = _get_smart_suggestions(query)
             return json.dumps({

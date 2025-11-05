@@ -424,7 +424,7 @@ const Welcome: React.FC = () => {
                             >
                               <Input
                                 prefix={<UserOutlined />}
-                                placeholder="默认账号: admin / test"
+                                placeholder="默认账号: admin"
                                 size="large"
                               />
                             </Form.Item>
@@ -437,7 +437,7 @@ const Welcome: React.FC = () => {
                             >
                               <Input.Password
                                 prefix={<LockOutlined />}
-                                placeholder="admin123 / test123"
+                                placeholder="admin123"
                                 size="large"
                               />
                             </Form.Item>
