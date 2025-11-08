@@ -205,16 +205,28 @@ class ConfigService:
         Returns:
             是否更新成功
         """
-        # 先将旧的提示词设为非激活
-        sql_deactivate = "UPDATE agent_prompt SET is_active = FALSE WHERE agent_code = %s"
-        self.db.execute_update(sql_deactivate, (agent_code,))
-        
-        # 插入新的提示词
-        sql_insert = """
-            INSERT INTO agent_prompt (agent_code, prompt_text, version, is_active)
-            VALUES (%s, %s, %s, TRUE)
+        # 直接更新激活的提示词
+        sql_update = """
+            UPDATE agent_prompt 
+            SET prompt_text = %s, version = %s, updated_at = NOW()
+            WHERE agent_code = %s AND is_active = TRUE
         """
-        affected = self.db.execute_update(sql_insert, (agent_code, prompt_text, version))
+        affected = self.db.execute_update(sql_update, (prompt_text, version, agent_code))
+        
+        # 如果没有激活的记录，查询最大 id 并插入新记录
+        if affected == 0:
+            # 获取最大 id
+            sql_max_id = "SELECT COALESCE(MAX(id), 0) as max_id FROM agent_prompt"
+            result = self.db.execute_query(sql_max_id)
+            next_id = result[0]['max_id'] + 1 if result else 1
+            
+            # 插入新记录
+            sql_insert = """
+                INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
+            """
+            affected = self.db.execute_update(sql_insert, (next_id, agent_code, prompt_text, version))
+        
         return affected > 0
     
     # ==================== 设备配置 ====================

@@ -27,6 +27,8 @@ import {
   getDevices,
   updateDevice,
   createDevice,
+  getAgentPrompt,
+  updateAgentPrompt,
   type AIModel,
   type Agent,
   type Device,
@@ -45,6 +47,7 @@ const Setting: React.FC = () => {
   const [agentLoading, setAgentLoading] = useState(false);
   const [deviceLoading, setDeviceLoading] = useState(false);
   const [xiaomiDevicesLoading, setXiaomiDevicesLoading] = useState(false);
+  const [agentPromptLoading, setAgentPromptLoading] = useState(false);
 
   // AI模型配置状态
   const [aiModels, setAiModels] = useState<AIModel[]>([]);
@@ -72,6 +75,12 @@ const Setting: React.FC = () => {
   const [selectedXiaomiDevice, setSelectedXiaomiDevice] = useState<XiaomiDevice | null>(null);
   const [isXiaomiDeviceDetailVisible, setIsXiaomiDeviceDetailVisible] = useState(false);
 
+  // Agent Prompt状态
+  const [agentPrompts, setAgentPrompts] = useState<Record<string, string>>({});
+  const [selectedAgentForPrompt, setSelectedAgentForPrompt] = useState<Agent | null>(null);
+  const [promptForm] = Form.useForm();
+  const [isPromptModalVisible, setIsPromptModalVisible] = useState(false);
+
   // ==================== 数据加载 ====================
 
   const loadAIModels = async () => {
@@ -95,6 +104,30 @@ const Setting: React.FC = () => {
       message.error(`加载Agent配置失败: ${error.message}`);
     } finally {
       setAgentLoading(false);
+    }
+  };
+
+  const loadAgentPrompts = async () => {
+    try {
+      setAgentPromptLoading(true);
+      const data = await getAgents();
+      setAgents(data);
+      
+      // 为每个Agent加载prompt
+      const prompts: Record<string, string> = {};
+      for (const agent of data) {
+        try {
+          const promptData = await getAgentPrompt(agent.agent_code);
+          prompts[agent.agent_code] = promptData.prompt_text;
+        } catch (error) {
+          console.error(`加载Agent ${agent.agent_code} 的prompt失败:`, error);
+        }
+      }
+      setAgentPrompts(prompts);
+    } catch (error: any) {
+      message.error(`加载Agent Prompt失败: ${error.message}`);
+    } finally {
+      setAgentPromptLoading(false);
     }
   };
 
@@ -143,6 +176,7 @@ const Setting: React.FC = () => {
     else if (activeTab === "2") loadAgents();
     else if (activeTab === "3") loadDevices();
     else if (activeTab === "4") loadXiaomiDevices();
+    else if (activeTab === "5") loadAgentPrompts();
   }, [activeTab]);
 
   // ==================== AI模型管理 ====================
@@ -206,6 +240,36 @@ const Setting: React.FC = () => {
 
       setIsAgentModalVisible(false);
       loadAgents();
+    } catch (error: any) {
+      message.error(`保存失败: ${error.message}`);
+    }
+  };
+
+  // ==================== Agent Prompt管理 ====================
+
+  const handleEditPrompt = (agent: Agent) => {
+    setSelectedAgentForPrompt(agent);
+    const promptText = agentPrompts[agent.agent_code] || "";
+    promptForm.setFieldsValue({ prompt_text: promptText });
+    setIsPromptModalVisible(true);
+  };
+
+  const handleSavePrompt = async () => {
+    try {
+      const values = await promptForm.validateFields();
+      
+      if (selectedAgentForPrompt) {
+        await updateAgentPrompt(selectedAgentForPrompt.agent_code, values.prompt_text);
+        message.success("Agent Prompt更新成功");
+        
+        // 更新本地状态
+        setAgentPrompts({
+          ...agentPrompts,
+          [selectedAgentForPrompt.agent_code]: values.prompt_text,
+        });
+      }
+
+      setIsPromptModalVisible(false);
     } catch (error: any) {
       message.error(`保存失败: ${error.message}`);
     }
@@ -377,6 +441,40 @@ const Setting: React.FC = () => {
     },
   ];
 
+  const agentPromptColumns = [
+    { title: "Agent名称", dataIndex: "agent_name", key: "agent_name", width: 200 },
+    { title: "Agent代码", dataIndex: "agent_code", key: "agent_code", width: 150 },
+    { 
+      title: "Prompt预览", 
+      key: "prompt_preview",
+      render: (_: any, record: Agent) => {
+        const prompt = agentPrompts[record.agent_code] || "未设置";
+        return (
+          <div style={{ maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {prompt.length > 100 ? `${prompt.substring(0, 100)}...` : prompt}
+          </div>
+        );
+      },
+    },
+    {
+      title: "状态",
+      dataIndex: "is_enabled",
+      key: "is_enabled",
+      width: 100,
+      render: (val: boolean) => val ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag>
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 120,
+      render: (_: any, record: Agent) => (
+        <Button type="primary" icon={<EditOutlined />} onClick={() => handleEditPrompt(record)}>
+          编辑Prompt
+        </Button>
+      ),
+    },
+  ];
+
   // ==================== 渲染 ====================
 
   const tabItems = [
@@ -464,6 +562,21 @@ const Setting: React.FC = () => {
             loading={xiaomiDevicesLoading}
             pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 个设备` }}
             scroll={{ x: 1000 }}
+          />
+        </Card>
+      ),
+    },
+    {
+      key: "5",
+      label: "Agent Prompt",
+      children: (
+        <Card>
+          <Table
+            dataSource={agents}
+            columns={agentPromptColumns}
+            rowKey="agent_code"
+            loading={agentPromptLoading}
+            pagination={false}
           />
         </Card>
       ),
@@ -634,6 +747,34 @@ const Setting: React.FC = () => {
             )}
           </Descriptions>
         )}
+      </Modal>
+
+      {/* Agent Prompt编辑模态框 */}
+      <Modal
+        title={`编辑 Agent Prompt - ${selectedAgentForPrompt?.agent_name || ''}`}
+        open={isPromptModalVisible}
+        onOk={handleSavePrompt}
+        onCancel={() => setIsPromptModalVisible(false)}
+        width={900}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={promptForm} layout="vertical">
+          <Form.Item 
+            label="系统提示词" 
+            name="prompt_text" 
+            rules={[{ required: true, message: "请输入系统提示词" }]}
+          >
+            <Input.TextArea 
+              rows={20} 
+              placeholder="请输入Agent的系统提示词..."
+              style={{ fontFamily: 'monospace' }}
+            />
+          </Form.Item>
+          <div style={{ color: '#888', fontSize: '12px', marginTop: '-10px' }}>
+            提示：修改Prompt后，需要重启对应的Agent服务才能生效
+          </div>
+        </Form>
       </Modal>
     </div>
   );

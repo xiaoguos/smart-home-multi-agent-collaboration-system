@@ -25,6 +25,140 @@ logger = logging.getLogger(__name__)
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
 
+def _query_device_status(device_type: str, agent_url: str) -> Dict[str, Any]:
+    """
+    查询设备状态
+    
+    Args:
+        device_type: 设备类型
+        agent_url: Agent URL
+        
+    Returns:
+        设备状态字典，如果查询失败返回空字典
+    """
+    try:
+        # 根据设备类型构建查询命令
+        status_commands = {
+            "air_conditioner": "查询空调状态",
+            "air_cleaner": "查询净化器状态",
+            "bedside_lamp": "查询灯状态"
+        }
+        
+        query_cmd = status_commands.get(device_type, "查询状态")
+        result = call_a2a_agent(agent_url, query_cmd)
+        
+        if result.get("success"):
+            content = result.get("content", "")
+            # 尝试解析为JSON
+            try:
+                import json
+                status = json.loads(content)
+                return status if isinstance(status, dict) else {}
+            except:
+                # 解析失败，返回原始内容
+                return {"raw_status": content}
+        return {}
+    except Exception as e:
+        logger.warning(f"查询设备状态失败: {e}")
+        return {}
+
+
+def _should_skip_operation(action: str, current_status: Dict[str, Any], device_type: str) -> tuple[bool, str]:
+    """
+    判断是否应该跳过操作（设备已经是目标状态）
+    
+    Args:
+        action: 要执行的操作
+        current_status: 当前设备状态
+        device_type: 设备类型
+        
+    Returns:
+        (should_skip, reason): 是否跳过和原因
+    """
+    if not current_status:
+        # 无法获取状态，继续操作
+        return False, ""
+    
+    action_lower = action.lower()
+    
+    # 空调状态检查
+    if device_type == "air_conditioner":
+        power_status = current_status.get("power")
+        if power_status is not None:
+            # 检查开启操作
+            if any(keyword in action_lower for keyword in ["开", "启动", "打开", "start", "on"]):
+                if power_status in ["on", True, "开"]:
+                    return True, f"空调已经处于开启状态（当前温度：{current_status.get('tar_temp', '未知')}°C）"
+            # 检查关闭操作
+            elif any(keyword in action_lower for keyword in ["关", "关闭", "stop", "off"]):
+                if power_status in ["off", False, "关"]:
+                    return True, "空调已经处于关闭状态"
+    
+    # 空气净化器状态检查
+    elif device_type == "air_cleaner":
+        power_status = current_status.get("power")
+        if power_status is not None:
+            if any(keyword in action_lower for keyword in ["开", "启动", "打开", "start", "on"]):
+                if power_status in ["on", True, "开"]:
+                    pm25 = current_status.get("aqi", "未知")
+                    return True, f"空气净化器已经处于开启状态（当前PM2.5：{pm25}）"
+            elif any(keyword in action_lower for keyword in ["关", "关闭", "stop", "off"]):
+                if power_status in ["off", False, "关"]:
+                    return True, "空气净化器已经处于关闭状态"
+    
+    # 床头灯状态检查
+    elif device_type == "bedside_lamp":
+        power_status = current_status.get("power")
+        if power_status is not None:
+            if any(keyword in action_lower for keyword in ["开", "启动", "打开", "start", "on"]):
+                if power_status in ["on", True, "开"]:
+                    brightness = current_status.get("bright", "未知")
+                    return True, f"床头灯已经处于开启状态（当前亮度：{brightness}%）"
+            elif any(keyword in action_lower for keyword in ["关", "关闭", "stop", "off"]):
+                if power_status in ["off", False, "关"]:
+                    return True, "床头灯已经处于关闭状态"
+    
+    return False, ""
+
+
+def _verify_operation_success(action: str, pre_status: Dict[str, Any], post_status: Dict[str, Any], device_type: str) -> str:
+    """
+    验证操作是否成功
+    
+    Args:
+        action: 执行的操作
+        pre_status: 操作前状态
+        post_status: 操作后状态
+        device_type: 设备类型
+        
+    Returns:
+        验证结果描述
+    """
+    if not post_status:
+        return "⚠️ 无法获取操作后状态，请手动确认设备状态"
+    
+    action_lower = action.lower()
+    
+    # 验证电源状态变化
+    if any(keyword in action_lower for keyword in ["开", "启动", "打开", "关", "关闭", "start", "stop", "on", "off"]):
+        pre_power = pre_status.get("power")
+        post_power = post_status.get("power")
+        
+        if pre_power != post_power:
+            if post_power in ["on", True, "开"]:
+                return "✅ 设备已成功开启"
+            elif post_power in ["off", False, "关"]:
+                return "✅ 设备已成功关闭"
+        elif post_power in ["on", True, "开"] and any(kw in action_lower for kw in ["开", "启动", "打开", "start", "on"]):
+            return "✅ 设备保持开启状态"
+        elif post_power in ["off", False, "关"] and any(kw in action_lower for kw in ["关", "关闭", "stop", "off"]):
+            return "✅ 设备保持关闭状态"
+        else:
+            return "⚠️ 设备状态可能未改变，请检查"
+    
+    return "✅ 操作已执行"
+
+
 def create_device_operation_record(
     system_user_id: int,
     device_type: str,
@@ -367,19 +501,22 @@ class DeviceControlArgs(BaseModel):
 @tool("control_device", args_schema=DeviceControlArgs, description="控制智能设备")
 def control_device(device_type: str, action: str, parameters: Dict[str, Any] = None):
     """
-    统一的设备控制接口
+    智能设备控制接口（带状态检查）
+    
+    功能：
+    1. 操作前检查设备状态，如果已经是目标状态则跳过操作
+    2. 执行设备操作
+    3. 操作后验证状态，确认操作是否成功
     
     返回格式：
     {
         "success": bool,
         "message": str,
         "content": str,
-        "operation_record": {  # 操作记录，由后端保存
-            "system_user_id": int,
-            "device_type": str,
-            "action": str,
-            ...
-        }
+        "skipped": bool,  # 是否跳过操作
+        "pre_check": dict,  # 操作前状态
+        "post_check": dict,  # 操作后状态
+        "operation_record": {...}
     }
     """
     start_time = time.time()
@@ -413,13 +550,47 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         agent_url = agent_config["url"]
         device_name = agent_config["name"]
         
+        # ========== 第1步：操作前检查状态 ==========
+        logger.info(f"[操作前检查] 正在查询 {device_name} 状态...")
+        pre_check_status = _query_device_status(device_type, agent_url)
+        
+        # 判断是否需要操作
+        should_skip, skip_reason = _should_skip_operation(action, pre_check_status, device_type)
+        
+        if should_skip:
+            # 设备已经是目标状态，跳过操作
+            logger.info(f"[跳过操作] {device_name}: {skip_reason}")
+            execution_time = int((time.time() - start_time) * 1000)
+            
+            operation_record = create_device_operation_record(
+                system_user_id=1000000001,
+                device_type=device_type,
+                device_name=device_name,
+                action=action,
+                parameters=parameters,
+                success=True,
+                response=skip_reason,
+                execution_time=execution_time
+            )
+            
+            return json.dumps({
+                "success": True,
+                "message": f"{device_name} 已经是目标状态",
+                "content": skip_reason,
+                "skipped": True,
+                "pre_check": pre_check_status,
+                "operation_record": operation_record
+            }, indent=2, ensure_ascii=False)
+        
+        # ========== 第2步：执行设备操作 ==========
         # 构建命令
         command = f"{action}"
         if parameters:
             param_str = ", ".join([f"{k}={v}" for k, v in parameters.items()])
             command += f" ({param_str})"
         
-        # 调用 A2A agent 执行实际控制 (现在是同步函数，会在线程中运行)
+        logger.info(f"[执行操作] {device_name}: {command}")
+        # 调用 A2A agent 执行实际控制
         result = call_a2a_agent(agent_url, command)
         
         execution_time = int((time.time() - start_time) * 1000)
@@ -462,13 +633,21 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                             "status": "failed",
                             "error": error_msg,
                             "details": content_json.get("message", ""),
+                            "pre_check": pre_check_status,
                             "operation_record": operation_record
                         }, indent=2, ensure_ascii=False)
                 except (json.JSONDecodeError, ValueError):
                     # 不是JSON格式，直接返回文本内容
                     pass
                 
-                # 创建成功操作记录
+                # ========== 第3步：操作后验证状态 ==========
+                logger.info(f"[操作后验证] 正在查询 {device_name} 状态...")
+                post_check_status = _query_device_status(device_type, agent_url)
+                
+                # 验证操作是否成功
+                verification_result = _verify_operation_success(action, pre_check_status, post_check_status, device_type)
+                
+                # 创建操作记录
                 operation_record = create_device_operation_record(
                     system_user_id=1000000001,
                     device_type=device_type,
@@ -480,16 +659,26 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     execution_time=execution_time
                 )
                 
+                # 构建反馈内容
+                feedback_content = f"{content}\n\n【状态验证】{verification_result}"
+                
                 # 返回结构化数据
                 return json.dumps({
                     "success": True,
                     "message": f"成功控制 {device_name}",
-                    "content": content,
+                    "content": feedback_content,
+                    "skipped": False,
+                    "pre_check": pre_check_status,
+                    "post_check": post_check_status,
+                    "verification": verification_result,
                     "operation_record": operation_record
                 }, indent=2, ensure_ascii=False)
             else:
-                # 如果没有提取到content，返回一个简单的成功消息
-                success_msg = f"成功控制 {device_name}：{action}"
+                # 如果没有提取到content，也要验证状态
+                post_check_status = _query_device_status(device_type, agent_url)
+                verification_result = _verify_operation_success(action, pre_check_status, post_check_status, device_type)
+                
+                success_msg = f"成功控制 {device_name}：{action}\n【状态验证】{verification_result}"
                 
                 # 创建成功操作记录
                 operation_record = create_device_operation_record(
@@ -507,6 +696,10 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     "success": True,
                     "message": success_msg,
                     "content": success_msg,
+                    "skipped": False,
+                    "pre_check": pre_check_status,
+                    "post_check": post_check_status,
+                    "verification": verification_result,
                     "operation_record": operation_record
                 }, indent=2, ensure_ascii=False)
         else:
