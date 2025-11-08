@@ -9,7 +9,7 @@ database:
   
   # StarRocks 连接配置
   starrocks:
-    host: "192.168.110.130"
+    host: "192.168.110.131"
     port: 9030
     user: "root"
     password: "123456"

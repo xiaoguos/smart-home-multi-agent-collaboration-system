@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # 默认配置 - 如果 MCP 不可用，会回退到这些配置
 DEFAULT_SYSTEM_USER_ID = 1000000001  # admin 用户ID
 DEFAULT_AC_NAME = "空调"
-AC_IP = "192.168.110.123"  # 默认IP（回退用）
+AC_IP = "192.168.110.129"  # 默认IP（回退用）
 AC_TOKEN = "1724bf8d57b355173dfa08ae23367f86"  # 默认Token（回退用）
 AC_MODEL = "lumi.acpartner.mcn02"
 

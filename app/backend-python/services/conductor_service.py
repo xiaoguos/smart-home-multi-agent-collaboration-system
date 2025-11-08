@@ -5,6 +5,7 @@ Conductor Agent 服务
 
 import logging
 import httpx
+import json
 from typing import Dict, Any
 from uuid import uuid4
 
@@ -50,6 +51,44 @@ class ConductorService:
             },
             "id": self._request_id_counter
         }
+    
+    async def _save_operation_record_if_present(self, content: str, system_user_id: int, context_id: str):
+        """
+        尝试从响应内容中提取operation_record并保存
+        
+        如果content中包含JSON格式的operation_record，提取并保存到数据库
+        """
+        try:
+            # 尝试解析content为JSON
+            content_json = json.loads(content)
+            
+            # 检查是否包含operation_record
+            if isinstance(content_json, dict) and "operation_record" in content_json:
+                operation_record = content_json["operation_record"]
+                
+                # 更新记录中的用户ID和上下文ID（以确保一致性）
+                operation_record["system_user_id"] = system_user_id
+                operation_record["context_id"] = context_id
+                
+                # 导入并使用设备操作服务
+                from services.device_operation_service import get_device_operation_service
+                device_operation_service = get_device_operation_service()
+                
+                # 保存操作记录
+                success = device_operation_service.save_operation_record(operation_record)
+                
+                if success:
+                    device_type = operation_record.get('device_type', 'unknown')
+                    action = operation_record.get('action', 'unknown')
+                    logger.info(f"💾 已保存设备操作记录: device={device_type}, action={action}")
+                else:
+                    logger.warning(f"⚠️ 保存设备操作记录失败")
+                    
+        except json.JSONDecodeError:
+            # content不是JSON格式，跳过
+            pass
+        except Exception as e:
+            logger.error(f"❌ 提取或保存操作记录时出错: {e}", exc_info=True)
     
     def _extract_content_from_response(self, response: Dict[str, Any]) -> tuple[str, str, bool]:
         """
@@ -169,6 +208,9 @@ class ConductorService:
             result = response_data.get("result", {})
             task_id = result.get("id")
             response_context_id = result.get("contextId", context_id)
+            
+            # 尝试从content中提取operation_record并保存
+            await self._save_operation_record_if_present(content, system_user_id, response_context_id)
             
             # 保存agent响应到数据库
             await chat_history_service.save_message(

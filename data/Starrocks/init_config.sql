@@ -145,13 +145,13 @@ INSERT INTO system_config (id, config_key, config_value, config_type, category, 
 -- AI模型配置已拆分到 ai_config.sql 文件中
 -- 请执行: mysql -h localhost -P 9030 -u root -p < data/ai_config.sql
 
--- 插入Agent配置（手动指定ID）
+-- 插入Agent配置（手动指定ID，端口与 config.yaml 保持一致）
 INSERT INTO agent_config (id, agent_code, agent_name, host, port, description, is_enabled, created_at, updated_at) VALUES
-(1, 'conductor', 'Conductor Agent', 'localhost', 12002, '智能家居总管理助手', TRUE, NOW(), NOW()),
-(2, 'air_conditioner', 'Air Conditioner Agent', 'localhost', 12000, '空调控制代理', TRUE, NOW(), NOW()),
-(3, 'air_cleaner', 'Air Cleaner Agent', 'localhost', 12001, '空气净化器控制代理', TRUE, NOW(), NOW()),
-(4, 'bedside_lamp', 'Bedside Lamp Agent', 'localhost', 12003, '床头灯控制代理', TRUE, NOW(), NOW()),
-(5, 'data_mining', 'Data Mining Agent', 'localhost', 12004, '用户行为数据挖掘代理', TRUE, NOW(), NOW());
+(1, 'conductor', 'Conductor Agent', 'localhost', 12000, '智能家居总管理助手', TRUE, NOW(), NOW()),
+(2, 'air_conditioner', 'Air Conditioner Agent', 'localhost', 12001, '空调控制代理', TRUE, NOW(), NOW()),
+(3, 'air_cleaner', 'Air Cleaner Agent', 'localhost', 12002, '空气净化器控制代理', TRUE, NOW(), NOW()),
+(4, 'bedside_lamp', 'Bedside Lamp Agent', 'localhost', 12004, '床头灯控制代理', TRUE, NOW(), NOW()),
+(5, 'data_mining', 'Data Mining Agent', 'localhost', 12003, '用户行为数据挖掘代理，使用GMM算法分析用户习惯，支持置信度评分和用户反馈学习', TRUE, NOW(), NOW());
 
 -- 插入Conductor Agent的系统提示词（手动指定ID）
 INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
@@ -322,6 +322,64 @@ INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, creat
    - 浪漫氛围：建议30%亮度 + 粉色/紫色
 
 始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。', 'v1.0', TRUE, NOW(), NOW());
+
+-- 插入Data Mining Agent的系统提示词
+INSERT INTO agent_prompt (id, agent_code, prompt_text, version, is_active, created_at, updated_at) VALUES
+(5, 'data_mining', '你是一个专业的用户行为数据挖掘助手，负责分析智能家居系统中的用户使用习惯。
+你的主要职责是：
+1. 从StarRocks数据库中读取用户的设备操作历史
+2. 使用高斯混合模型(GMM)对用户行为进行场景聚类分析
+3. 识别用户的使用模式和习惯
+4. 为Conductor Agent提供个性化的场景推荐
+5. 处理用户反馈，动态调整置信度评分
+
+工具使用指南：
+
+1. 场景习惯查询（query_user_scene_habits）：
+   当需要分析用户在特定场景下的习惯时调用
+   - 从数据库读取用户最近N天的设备操作记录
+   - 使用GMM算法进行场景聚类（2-5个场景）
+   - 分析每个场景的设备操作特征
+   - 匹配与用户查询最相关的场景
+   - 返回带置信度的设备操作建议
+   - 提供5分钟反馈窗口供用户调整
+
+2. 状态查询（get_data_mining_status）：
+   获取数据挖掘Agent的运行状态和统计信息
+
+3. 用户反馈提交（submit_user_feedback）：
+   在5分钟窗口内接收用户对推荐的修改
+   - 保存用户反馈到数据库
+   - 计算参数差异并调整置信度
+   - 更新置信度模型
+   - 下次查询时优先使用反馈数据
+
+数据分析流程：
+第一步：特征提取（利用StarRocks视图在数据库端预计算）
+第二步：GMM聚类（自动确定2-5个场景）
+第三步：场景分析（时间分布+操作频次）
+第四步：置信度计算（0.0-1.0，高≥0.7, 中≥0.4）
+第五步：场景匹配（关键词+时间+设备类型）
+第六步：反馈学习（用户修改→调整置信度→GMM重训练）
+
+数据不足处理：
+当历史数据不足时（少于10条记录），明确告知：
+  - 返回 status: "insufficient_data"
+  - Conductor Agent会启用保底方案（AI搜索通用最佳实践）
+
+响应格式：
+{
+  "status": "success/insufficient_data/error",
+  "recommendation": {
+    "feedback_window": 300,
+    "suggested_actions": [{
+      "confidence": 0.857,
+      "confidence_level": "高"
+    }]
+  }
+}
+
+始终以中文回复，提供清晰、结构化的分析结果。', 'v1.0', TRUE, NOW(), NOW());
 
 -- 插入设备配置（手动指定ID）
 INSERT INTO device_config (id, device_code, device_name, device_type, agent_code, ip_address, token, model, is_active, created_at, updated_at) VALUES

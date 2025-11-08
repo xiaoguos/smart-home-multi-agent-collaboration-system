@@ -1,65 +1,63 @@
 """
 设备操作记录服务
-负责存储和查询设备操作记录
+负责保存和管理设备操作记录
 """
-
 import logging
+import time
+import random
 import json
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, Optional, List
 from datetime import datetime
-
-from database import query, insert
+from database import insert, query, DatabaseConnectionError
 
 logger = logging.getLogger(__name__)
 
 
 class DeviceOperationService:
-    """设备操作记录服务"""
+    """设备操作记录服务类"""
     
     @staticmethod
-    def generate_id() -> int:
-        """生成唯一ID（使用时间戳+随机数）"""
-        import time
-        import random
-        return int(time.time() * 1000000) + random.randint(1000, 9999)
-    
-    @staticmethod
-    async def save_operation(
-        system_user_id: int,
-        device_type: str,
-        action: str,
-        success: bool,
-        context_id: Optional[str] = None,
-        device_name: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
-        response: Optional[str] = None,
-        error_message: Optional[str] = None,
-        execution_time: Optional[int] = None
-    ) -> bool:
+    def save_operation_record(operation_record: Dict[str, Any]) -> bool:
         """
-        保存设备操作记录
+        保存设备操作记录到数据库
         
         Args:
-            system_user_id: 系统用户ID
-            device_type: 设备类型
-            action: 操作动作
-            success: 是否成功
-            context_id: 会话上下文ID（可选）
-            device_name: 设备名称（可选）
-            parameters: 操作参数（可选）
-            response: 操作响应（可选）
-            error_message: 错误信息（如果失败）
-            execution_time: 执行时间（毫秒）
-            
+            operation_record: 操作记录字典，包含以下字段：
+                - system_user_id: int
+                - context_id: Optional[str]
+                - device_type: str
+                - device_name: Optional[str]
+                - action: str
+                - parameters: Optional[Dict]
+                - success: bool
+                - response: Optional[str]
+                - error_message: Optional[str]
+                - execution_time: Optional[int]
+                - timestamp: str (ISO格式)
+        
         Returns:
-            是否成功保存
+            bool: 保存是否成功
         """
         try:
-            op_id = DeviceOperationService.generate_id()
+            # 生成操作ID
+            op_id = int(time.time() * 1000000) + random.randint(1000, 9999)
             
-            # 将参数转为JSON字符串
+            # 提取字段
+            system_user_id = operation_record.get('system_user_id', 1000000001)
+            context_id = operation_record.get('context_id')
+            device_type = operation_record.get('device_type')
+            device_name = operation_record.get('device_name')
+            action = operation_record.get('action')
+            parameters = operation_record.get('parameters')
+            success = operation_record.get('success', False)
+            response = operation_record.get('response')
+            error_message = operation_record.get('error_message')
+            execution_time = operation_record.get('execution_time')
+            
+            # 转换参数为JSON
             parameters_json = json.dumps(parameters, ensure_ascii=False) if parameters else None
             
+            # SQL插入语句
             sql = """
                 INSERT INTO device_operations 
                 (id, system_user_id, context_id, device_type, device_name, action, 
@@ -76,11 +74,12 @@ class DeviceOperationService:
                 action,
                 parameters_json,
                 success,
-                response,
-                error_message,
+                response[:1000] if response else None,  # 限制长度
+                error_message[:500] if error_message else None,  # 限制长度
                 execution_time
             )
             
+            # 执行插入
             insert(sql, params)
             
             status_emoji = "✅" if success else "❌"
@@ -88,36 +87,37 @@ class DeviceOperationService:
                 f"{status_emoji} 保存设备操作记录: user={system_user_id}, "
                 f"device={device_type}, action={action}, success={success}"
             )
+            
             return True
             
+        except DatabaseConnectionError as e:
+            logger.error(f"❌ 数据库连接失败，无法保存操作记录: {e}")
+            return False
         except Exception as e:
             logger.error(f"❌ 保存设备操作记录失败: {e}", exc_info=True)
             return False
     
     @staticmethod
-    async def get_user_operations(
+    def get_recent_operations(
         system_user_id: int,
-        device_type: Optional[str] = None,
-        limit: int = 50
+        limit: int = 50,
+        device_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        获取用户的设备操作记录
+        获取最近的操作记录
         
         Args:
-            system_user_id: 系统用户ID
-            device_type: 设备类型（可选，不指定则返回所有类型）
+            system_user_id: 用户ID
             limit: 返回记录数量限制
-            
+            device_type: 可选，过滤设备类型
+        
         Returns:
             操作记录列表
         """
         try:
             if device_type:
                 sql = """
-                    SELECT id, system_user_id, context_id, device_type, device_name, 
-                           action, parameters, success, response, error_message, 
-                           execution_time, created_at
-                    FROM device_operations
+                    SELECT * FROM device_operations
                     WHERE system_user_id = %s AND device_type = %s
                     ORDER BY created_at DESC
                     LIMIT %s
@@ -125,10 +125,7 @@ class DeviceOperationService:
                 params = (system_user_id, device_type, limit)
             else:
                 sql = """
-                    SELECT id, system_user_id, context_id, device_type, device_name, 
-                           action, parameters, success, response, error_message, 
-                           execution_time, created_at
-                    FROM device_operations
+                    SELECT * FROM device_operations
                     WHERE system_user_id = %s
                     ORDER BY created_at DESC
                     LIMIT %s
@@ -137,63 +134,84 @@ class DeviceOperationService:
             
             results = query(sql, params)
             
-            # 解析parameters JSON字符串
-            for row in results:
-                if row.get('parameters'):
+            # 转换时间戳为字符串
+            for record in results:
+                if 'created_at' in record and isinstance(record['created_at'], datetime):
+                    record['created_at'] = record['created_at'].isoformat()
+                
+                # 解析parameters JSON
+                if 'parameters' in record and record['parameters']:
                     try:
-                        row['parameters'] = json.loads(row['parameters'])
+                        record['parameters'] = json.loads(record['parameters'])
                     except:
                         pass
             
             return results
             
         except Exception as e:
-            logger.error(f"❌ 获取设备操作记录失败: {e}", exc_info=True)
+            logger.error(f"❌ 查询操作记录失败: {e}")
             return []
     
     @staticmethod
-    async def get_failed_operations(
+    def get_operation_statistics(
         system_user_id: int,
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
+        days: int = 7
+    ) -> Dict[str, Any]:
         """
-        获取用户失败的操作记录
+        获取操作统计信息
         
         Args:
-            system_user_id: 系统用户ID
-            limit: 返回记录数量限制
-            
+            system_user_id: 用户ID
+            days: 统计最近多少天
+        
         Returns:
-            失败的操作记录列表
+            统计信息字典
         """
         try:
             sql = """
-                SELECT id, system_user_id, context_id, device_type, device_name, 
-                       action, parameters, response, error_message, 
-                       execution_time, created_at
+                SELECT 
+                    device_type,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN success = TRUE THEN 1 ELSE 0 END) as success_count,
+                    SUM(CASE WHEN success = FALSE THEN 1 ELSE 0 END) as failure_count,
+                    AVG(execution_time) as avg_execution_time
                 FROM device_operations
-                WHERE system_user_id = %s AND success = FALSE
-                ORDER BY created_at DESC
-                LIMIT %s
+                WHERE system_user_id = %s 
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                GROUP BY device_type
             """
             
-            results = query(sql, (system_user_id, limit))
+            results = query(sql, (system_user_id, days))
             
-            # 解析parameters JSON字符串
+            # 转换结果
+            statistics = {
+                "period_days": days,
+                "devices": {}
+            }
+            
             for row in results:
-                if row.get('parameters'):
-                    try:
-                        row['parameters'] = json.loads(row['parameters'])
-                    except:
-                        pass
+                device_type = row['device_type']
+                statistics["devices"][device_type] = {
+                    "total": int(row['total_count']),
+                    "success": int(row['success_count']),
+                    "failure": int(row['failure_count']),
+                    "success_rate": round(row['success_count'] / row['total_count'] * 100, 2) if row['total_count'] > 0 else 0,
+                    "avg_execution_time_ms": round(float(row['avg_execution_time']), 2) if row['avg_execution_time'] else 0
+                }
             
-            return results
+            return statistics
             
         except Exception as e:
-            logger.error(f"❌ 获取失败操作记录失败: {e}", exc_info=True)
-            return []
+            logger.error(f"❌ 查询操作统计失败: {e}")
+            return {"error": str(e)}
 
 
-# 创建全局服务实例
-device_operation_service = DeviceOperationService()
+# 全局服务实例
+_device_operation_service = None
 
+def get_device_operation_service() -> DeviceOperationService:
+    """获取设备操作服务单例"""
+    global _device_operation_service
+    if _device_operation_service is None:
+        _device_operation_service = DeviceOperationService()
+    return _device_operation_service
