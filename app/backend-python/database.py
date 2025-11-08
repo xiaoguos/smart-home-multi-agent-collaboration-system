@@ -44,12 +44,27 @@ class DatabaseConnection:
     # 加载配置文件
     def _load_config(self, config_path: str) -> dict:
         try:
-            # 处理相对路径
-            if not os.path.isabs(config_path):
+            # 处理绝对路径
+            if os.path.isabs(config_path):
+                yaml_path = Path(config_path)
+            else:
+                # 尝试相对于当前文件的路径
                 current_dir = Path(__file__).parent
                 yaml_path = (current_dir / config_path).resolve()
-            else:
-                yaml_path = Path(config_path)
+                
+                # 如果找不到，向上查找项目根目录的 config.yaml
+                if not yaml_path.exists():
+                    # 从当前目录开始向上查找
+                    search_dir = Path.cwd()
+                    for _ in range(5):  # 最多向上查找5层
+                        candidate = search_dir / "config.yaml"
+                        if candidate.exists():
+                            yaml_path = candidate
+                            break
+                        search_dir = search_dir.parent
+            
+            if not yaml_path.exists():
+                raise FileNotFoundError(f"配置文件未找到: {config_path}")
             
             with open(yaml_path, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)

@@ -25,22 +25,7 @@ logger = logging.getLogger(__name__)
 # 线程池用于执行异步操作
 _executor = ThreadPoolExecutor(max_workers=5)
 
-# 延迟导入database模块，避免循环依赖
-_db_module = None
-def get_db():
-    """延迟加载数据库模块"""
-    global _db_module
-    if _db_module is None:
-        try:
-            from database import insert
-            _db_module = {'insert': insert}
-            logger.info("✅ 数据库模块加载成功")
-        except Exception as e:
-            logger.warning(f"⚠️ 数据库模块加载失败（将跳过数据库记录）: {e}")
-            _db_module = {'insert': None}
-    return _db_module
-
-def save_device_operation(
+def create_device_operation_record(
     system_user_id: int,
     device_type: str,
     action: str,
@@ -51,54 +36,28 @@ def save_device_operation(
     response: Optional[str] = None,
     error_message: Optional[str] = None,
     execution_time: Optional[int] = None
-):
+) -> Dict[str, Any]:
     """
-    保存设备操作记录到数据库（同步版本）
+    创建设备操作记录（返回字典，不直接保存到数据库）
     
-    注意：这是一个同步函数，会在工具调用时直接执行
+    返回的记录由后端统一保存到数据库
+    
+    Returns:
+        包含操作详情的字典
     """
-    try:
-        db = get_db()
-        if db['insert'] is None:
-            logger.debug("数据库未加载，跳过记录")
-            return False
-        
-        op_id = int(time.time() * 1000000) + random.randint(1000, 9999)
-        parameters_json = json.dumps(parameters, ensure_ascii=False) if parameters else None
-        
-        sql = """
-            INSERT INTO device_operations 
-            (id, system_user_id, context_id, device_type, device_name, action, 
-             parameters, success, response, error_message, execution_time, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        """
-        
-        params = (
-            op_id,
-            system_user_id,
-            context_id,
-            device_type,
-            device_name,
-            action,
-            parameters_json,
-            success,
-            response[:1000] if response else None,  # 限制响应长度
-            error_message[:500] if error_message else None,  # 限制错误信息长度
-            execution_time
-        )
-        
-        db['insert'](sql, params)
-        
-        status_emoji = "✅" if success else "❌"
-        logger.info(
-            f"{status_emoji} 记录设备操作: user={system_user_id}, "
-            f"device={device_type}, action={action}, success={success}"
-        )
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ 保存设备操作记录失败: {e}", exc_info=True)
-        return False
+    return {
+        "system_user_id": system_user_id,
+        "context_id": context_id,
+        "device_type": device_type,
+        "device_name": device_name,
+        "action": action,
+        "parameters": parameters,
+        "success": success,
+        "response": response[:1000] if response else None,  # 限制响应长度
+        "error_message": error_message[:500] if error_message else None,  # 限制错误信息长度
+        "execution_time": execution_time,
+        "timestamp": datetime.now().isoformat()
+    }
 
 def extract_user_id_from_message(message: str) -> int:
     """从消息中提取用户ID"""
@@ -113,7 +72,7 @@ def extract_user_id_from_message(message: str) -> int:
     return 1000000001  # 默认返回admin用户ID
 
 # 注册的代理服务配置
-# 端口分配：
+# 端口分配（与 config.yaml 保持一致）：
 # - conductor_agent: 12000
 # - air_conditioner_agent: 12001
 # - air_cleaner_agent: 12002
@@ -132,17 +91,17 @@ REGISTERED_AGENTS = {
         "description": "控制空气净化器设备",
         "capabilities": ["空气质量监测", "净化模式控制", "滤网状态", "风扇等级控制", "PM2.5监测", "湿度监测"]
     },
-    "data_mining": {
-        "name": "数据挖掘代理",
-        "url": "http://localhost:12003",
-        "description": "分析用户行为数据",
-        "capabilities": ["习惯分析", "偏好预测", "历史查询", "统计分析"]
-    },
     "bedside_lamp": {
         "name": "床头灯代理",
         "url": "http://localhost:12004",
         "description": "控制Yeelink床头灯设备",
         "capabilities": ["电源控制", "亮度调节", "色温设置", "颜色设置", "场景模式", "阅读模式", "睡眠模式", "浪漫模式", "夜灯模式"]
+    },
+    "data_mining": {
+        "name": "数据挖掘代理",
+        "url": "http://localhost:12003",
+        "description": "分析用户行为数据，提供基于GMM聚类的场景推荐",
+        "capabilities": ["GMM场景聚类", "用户习惯分析", "个性化推荐", "历史行为分析"]
     }
 }
 
@@ -407,7 +366,22 @@ class DeviceControlArgs(BaseModel):
 
 @tool("control_device", args_schema=DeviceControlArgs, description="控制智能设备")
 def control_device(device_type: str, action: str, parameters: Dict[str, Any] = None):
-    """统一的设备控制接口"""
+    """
+    统一的设备控制接口
+    
+    返回格式：
+    {
+        "success": bool,
+        "message": str,
+        "content": str,
+        "operation_record": {  # 操作记录，由后端保存
+            "system_user_id": int,
+            "device_type": str,
+            "action": str,
+            ...
+        }
+    }
+    """
     start_time = time.time()
     
     try:
@@ -415,22 +389,23 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
             parameters = {}
             
         if device_type not in REGISTERED_AGENTS:
+            execution_time = int((time.time() - start_time) * 1000)
             error_result = {
+                "success": False,
+                "message": f"设备类型 {device_type} 不支持",
                 "error": f"设备类型 {device_type} 不支持",
-                "supported_types": list(REGISTERED_AGENTS.keys())
+                "supported_types": list(REGISTERED_AGENTS.keys()),
+                "operation_record": create_device_operation_record(
+                    system_user_id=1000000001,
+                    device_type=device_type,
+                    device_name=None,
+                    action=action,
+                    parameters=parameters,
+                    success=False,
+                    error_message=f"不支持的设备类型: {device_type}",
+                    execution_time=execution_time
+                )
             }
-            
-            # 记录失败操作
-            save_device_operation(
-                system_user_id=1000000001,  # 使用默认admin用户ID
-                device_type=device_type,
-                device_name=None,
-                action=action,
-                parameters=parameters,
-                success=False,
-                error_message=f"不支持的设备类型: {device_type}",
-                execution_time=int((time.time() - start_time) * 1000)
-            )
             
             return json.dumps(error_result, indent=2, ensure_ascii=False)
         
@@ -463,8 +438,8 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                         error_msg = content_json.get('error')
                         logger.error(f"{device_name} 操作失败: {error_msg}")
                         
-                        # 记录失败操作
-                        save_device_operation(
+                        # 创建失败操作记录
+                        operation_record = create_device_operation_record(
                             system_user_id=1000000001,
                             device_type=device_type,
                             device_name=device_name,
@@ -477,6 +452,7 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                         )
                         
                         return json.dumps({
+                            "success": False,
                             "message": f"{device_name} 操作失败",
                             "device_type": device_type,
                             "device_name": device_name,
@@ -485,14 +461,15 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                             "command": command,
                             "status": "failed",
                             "error": error_msg,
-                            "details": content_json.get("message", "")
+                            "details": content_json.get("message", ""),
+                            "operation_record": operation_record
                         }, indent=2, ensure_ascii=False)
                 except (json.JSONDecodeError, ValueError):
                     # 不是JSON格式，直接返回文本内容
                     pass
                 
-                # 记录成功操作
-                save_device_operation(
+                # 创建成功操作记录
+                operation_record = create_device_operation_record(
                     system_user_id=1000000001,
                     device_type=device_type,
                     device_name=device_name,
@@ -503,14 +480,19 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     execution_time=execution_time
                 )
                 
-                # 正常返回内容
-                return content
+                # 返回结构化数据
+                return json.dumps({
+                    "success": True,
+                    "message": f"成功控制 {device_name}",
+                    "content": content,
+                    "operation_record": operation_record
+                }, indent=2, ensure_ascii=False)
             else:
                 # 如果没有提取到content，返回一个简单的成功消息
                 success_msg = f"成功控制 {device_name}：{action}"
                 
-                # 记录成功操作
-                save_device_operation(
+                # 创建成功操作记录
+                operation_record = create_device_operation_record(
                     system_user_id=1000000001,
                     device_type=device_type,
                     device_name=device_name,
@@ -521,13 +503,18 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     execution_time=execution_time
                 )
                 
-                return success_msg
+                return json.dumps({
+                    "success": True,
+                    "message": success_msg,
+                    "content": success_msg,
+                    "operation_record": operation_record
+                }, indent=2, ensure_ascii=False)
         else:
             error_msg = result.get("error", "未知错误")
             logger.error(f"控制 {device_name} 失败: {error_msg}")
             
-            # 记录失败操作
-            save_device_operation(
+            # 创建失败操作记录
+            operation_record = create_device_operation_record(
                 system_user_id=1000000001,
                 device_type=device_type,
                 device_name=device_name,
@@ -539,6 +526,7 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
             )
             
             return json.dumps({
+                "success": False,
                 "message": f"控制 {device_name} 失败",
                 "device_type": device_type,
                 "device_name": device_name,
@@ -546,7 +534,8 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                 "parameters": parameters,
                 "command": command,
                 "status": "failed",
-                "error": error_msg
+                "error": error_msg,
+                "operation_record": operation_record
             }, indent=2, ensure_ascii=False)
         
     except Exception as e:
@@ -554,8 +543,8 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         error_msg = str(e)
         logger.error(f"设备控制异常: {error_msg}")
         
-        # 记录异常操作
-        save_device_operation(
+        # 创建异常操作记录
+        operation_record = create_device_operation_record(
             system_user_id=1000000001,
             device_type=device_type,
             device_name=REGISTERED_AGENTS.get(device_type, {}).get("name"),
@@ -567,8 +556,10 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
         )
         
         return json.dumps({
+            "success": False,
             "error": error_msg,
-            "message": "设备控制失败"
+            "message": "设备控制失败",
+            "operation_record": operation_record
         }, indent=2, ensure_ascii=False)
 
 
