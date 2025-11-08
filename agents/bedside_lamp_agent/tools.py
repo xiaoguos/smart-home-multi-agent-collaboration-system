@@ -11,21 +11,15 @@ import threading
 logger = logging.getLogger(__name__)
 
 # 设备配置
-LAMP_IP = "192.168.110.129"
+LAMP_IP = "192.168.110.122"
 LAMP_TOKEN = "4a90f98aaa1273ca34685d66d6e13958"
 LAMP_MODEL = "yeelink.light.bslamp2"
 
-# 创建设备实例 - 使用 DeviceFactory 自动检测设备类型（参考 Iot.py）
 try:
     device = DeviceFactory.create(LAMP_IP, LAMP_TOKEN)
     logger.info(f"使用 DeviceFactory 创建设备成功: {LAMP_MODEL}")
 except Exception as e:
     logger.warning(f"DeviceFactory 创建失败，使用 MiotDevice: {e}")
-    device = MiotDevice(
-        ip=LAMP_IP,
-        token=LAMP_TOKEN,
-        model=LAMP_MODEL
-    )
 
 # 添加线程锁，确保同一时间只有一个操作
 device_lock = threading.Lock()
@@ -36,23 +30,21 @@ def get_lamp_status():
     """获取床头灯设备状态并以 JSON 格式返回"""
     try:
         with device_lock:  # 使用锁确保串行执行
-            # 参考 Iot.py - 使用 MIoT 协议获取属性
-            # siid=2 (灯光服务), piid=1-5 (各种属性)
-            power = device.get_property_by(2, 1)  # 电源状态
-            brightness = device.get_property_by(2, 2)  # 亮度 (1-100)
-            color_temp = device.get_property_by(2, 3)  # 色温 (1700-6500K)
-            color_mode = device.get_property_by(2, 4)  # 颜色模式
-            color = device.get_property_by(2, 5)  # RGB颜色值
+            # 使用 status() 方法获取 DeviceStatus 对象
+            device_status = device.status()
             
+            # 构建状态字典
             status = {
-                "power": power[0] if isinstance(power, list) else power,
-                "brightness": brightness[0] if isinstance(brightness, list) else brightness,
-                "color_temp": color_temp[0] if isinstance(color_temp, list) else color_temp,
-                "color_mode": color_mode[0] if isinstance(color_mode, list) else color_mode,
-                "color": color[0] if isinstance(color, list) else color,
+                "power": device_status.power if hasattr(device_status, 'power') else None,
+                "is_on": device_status.is_on if hasattr(device_status, 'is_on') else None,
+                "brightness": device_status.brightness if hasattr(device_status, 'brightness') else None,
+                "color_temp": device_status.color_temp if hasattr(device_status, 'color_temp') else None,
+                "color_mode": device_status.color_mode if hasattr(device_status, 'color_mode') else None,
+                "rgb": device_status.rgb if hasattr(device_status, 'rgb') else None,
                 "online": True,
                 "model": LAMP_MODEL
             }
+            
             return json.dumps(status, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"获取床头灯状态失败: {e}")
@@ -105,7 +97,7 @@ def set_lamp_brightness(brightness: int):
     try:
         with device_lock:
             # 参考 Iot.py - 设置亮度 (siid=2, piid=2)
-            result = device.set_property_by(2, 2, brightness)
+            result = device.send("set_bright", [brightness])
             logger.info(f"亮度已设置为{brightness}%")
             return json.dumps({
                 "message": f"亮度已设置为{brightness}%",
@@ -131,8 +123,7 @@ def set_lamp_color_temp(color_temp: int):
     """设置床头灯色温"""
     try:
         with device_lock:
-            # 参考 Iot.py - 设置色温 (siid=2, piid=3)
-            result = device.set_property_by(2, 3, color_temp)
+            result = device.send("set_ct_abx", [color_temp, "smooth", 500])
             temp_desc = "暖光" if color_temp < 3000 else "中性光" if color_temp < 5000 else "冷光"
             logger.info(f"色温已设置为{color_temp}K ({temp_desc})")
             return json.dumps({
@@ -162,9 +153,8 @@ def set_lamp_color(red: int, green: int, blue: int):
     """设置床头灯RGB颜色"""
     try:
         with device_lock:
-            # 参考 Iot.py - 设置RGB颜色 (siid=2, piid=5)
             color_value = (red << 16) | (green << 8) | blue
-            result = device.set_property_by(2, 5, color_value)
+            result = device.send("set_rgb", [color_value])
             logger.info(f"颜色已设置为 RGB({red}, {green}, {blue})")
             return json.dumps({
                 "message": f"颜色已设置为 RGB({red}, {green}, {blue})",

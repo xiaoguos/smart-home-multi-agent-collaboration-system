@@ -1,9 +1,3 @@
-"""
-Agent配置加载器
-从 config.yaml 和 StarRocks 数据库中加载Agent配置和AI模型配置
-支持统一配置管理
-"""
-
 import sys
 import os
 import yaml

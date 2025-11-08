@@ -1049,14 +1049,6 @@ def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn",
             "message": f"获取设备信息异常: {str(e)}",
         }, ensure_ascii=False, indent=2)
 
-
-# ==================== 旧工具已移除 ====================
-# 注意：旧的 get_xiaomi_devices（需要账号密码）已被移除
-# 现在统一使用下方的 list_xiaomi_devices（自动从数据库获取凭证）
-
-
-# ==================== 通过MCP自动获取小米设备（无需密码）====================
-
 class ListXiaomiDevicesArgs(BaseModel):
     system_user_id: int = Field(description="系统用户ID，必须传入当前用户的ID")
     server: str = Field(default="cn", description="服务器区域，默认cn")
