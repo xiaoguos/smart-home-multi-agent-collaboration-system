@@ -15,6 +15,7 @@ from config_loader import get_config_loader
 from tools import (
     get_purifier_status,
     set_purifier_power,
+    set_purifier_mode,
     set_purifier_fan_level,
     set_purifier_led,
     set_purifier_alarm,
@@ -47,23 +48,27 @@ class AirPurifierAgent:
         '2. 电源控制：当用户说"打开/开启/启动净化器"时，调用 set_purifier_power(power=True)；'
         '   说"关闭/关掉净化器"时，调用 set_purifier_power(power=False)。'
         ''
-        '3. 风扇等级：支持1-4档，当用户说"一档/最小风"时设为1，"二档"时设为2，'
-        '   "三档"时设为3，"四档/最大风/强力"时设为4，使用 set_purifier_fan_level(level=1/2/3/4)。'
+        '3. 工作模式：支持0=自动模式（根据PM2.5自动调节）、1=睡眠模式（低噪音）、2=手动模式（手动设置风扇等级）。'
+        '   使用 set_purifier_mode(mode=0/1/2) 设置。注意：要手动设置风扇等级，设备必须先切换到手动模式（mode=2）。'
         ''
-        '4. LED控制：当用户说"开启LED/开灯"时设为True，"关闭LED/关灯"时设为False，'
+        '4. 风扇等级：支持1-4档，当用户说"一档/最小风"时设为1，"二档"时设为2，'
+        '   "三档"时设为3，"四档/最大风/强力"时设为4，使用 set_purifier_fan_level(level=1/2/3/4)。'
+        '   **重要**：set_purifier_fan_level 工具会自动检查并切换到手动模式，无需手动调用 set_purifier_mode。'
+        ''
+        '5. LED控制：当用户说"开启LED/开灯"时设为True，"关闭LED/关灯"时设为False，'
         '   使用 set_purifier_led(brightness=True/False)。'
         ''
-        '5. 提示音控制：当用户说"开启提示音/打开声音"时设为True，"关闭提示音/静音"时设为False，'
+        '6. 提示音控制：当用户说"开启提示音/打开声音"时设为True，"关闭提示音/静音"时设为False，'
         '   使用 set_purifier_alarm(alarm=True/False)。'
         ''
-        '6. 童锁控制：当用户说"开启童锁/锁定按键"时设为True，"关闭童锁/解锁按键"时设为False，'
+        '7. 童锁控制：当用户说"开启童锁/锁定按键"时设为True，"关闭童锁/解锁按键"时设为False，'
         '   使用 set_purifier_child_lock(child_lock=True/False)。'
         ''
-        '7. 智能场景建议：'
-        '   - 空气质量差（PM2.5>75）：建议开启并设为高速档（4档）'
-        '   - 睡眠时段：建议设为低速档（1档）+关闭LED+关闭提示音'
+        '8. 智能场景建议：'
+        '   - 空气质量差（PM2.5>75）：建议开启并设为高速档（4档）或自动模式'
+        '   - 睡眠时段：建议设为睡眠模式（mode=1）或低速档（1档）+关闭LED+关闭提示音'
         '   - 滤芯寿命<10%：提醒用户更换滤芯'
-        '   - 空气质量好（PM2.5<35）：可建议降低风扇等级或关闭以节能'
+        '   - 空气质量好（PM2.5<35）：可建议降低风扇等级、切换到自动模式或关闭以节能'
         ''
         '始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。'
     )
@@ -97,6 +102,7 @@ class AirPurifierAgent:
         self.tools = [
             get_purifier_status,
             set_purifier_power,
+            set_purifier_mode,
             set_purifier_fan_level,
             set_purifier_led,
             set_purifier_alarm,

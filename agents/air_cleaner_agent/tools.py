@@ -96,20 +96,68 @@ def set_purifier_power(power: bool):
         }, indent=2, ensure_ascii=False)
 
 
+class ModeArgs(BaseModel):
+    mode: int = Field(..., ge=0, le=2, description="工作模式：0=自动模式，1=睡眠模式，2=手动模式")
+
+
+@tool("set_purifier_mode", args_schema=ModeArgs, description="设置空气净化器工作模式（0=自动，1=睡眠，2=手动）")
+def set_purifier_mode(mode: int):
+    """设置空气净化器工作模式"""
+    try:
+        with device_lock:
+            result = miot_device.set_property_by(2, 4, mode)  # PIID 4: mode
+            mode_names = {0: "自动模式", 1: "睡眠模式", 2: "手动模式"}
+            mode_name = mode_names.get(mode, f"模式{mode}")
+            logger.info(f"工作模式已设置为{mode_name}")
+            return json.dumps({
+                "message": f"工作模式已设置为{mode_name}",
+                "mode": mode,
+                "mode_name": mode_name,
+                "result": str(result)
+            }, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"设置空气净化器工作模式失败: {e}")
+        return json.dumps({
+            "error": f"设置工作模式失败: {str(e)}",
+            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=PURIFIER_IP),
+            "online": False,
+            "model": PURIFIER_MODEL
+        }, indent=2, ensure_ascii=False)
+
+
 class FanLevelArgs(BaseModel):
     level: int = Field(..., ge=1, le=4, description="风扇等级，范围 1-4 (1档、2档、3档、4档)")
 
 
 @tool("set_purifier_fan_level", args_schema=FanLevelArgs, description="设置空气净化器风扇等级（1档、2档、3档、4档）")
 def set_purifier_fan_level(level: int):
-    """设置空气净化器风扇等级"""
+    """设置空气净化器风扇等级
+    
+    注意：要手动设置风扇等级，设备必须处于手动模式（mode=2）。
+    如果设备处于自动模式，会自动先切换到手动模式。
+    """
     try:
         with device_lock:
-            result = miot_device.set_property_by(2, 5, level)  # 正确的 PIID 是 5
+            # 先检查当前模式
+            try:
+                current_mode_result = miot_device.get_property_by(2, 4)
+                current_mode = current_mode_result[0].get('value') if isinstance(current_mode_result, list) else current_mode_result
+                
+                # 如果不是手动模式（mode != 2），先切换到手动模式
+                if current_mode != 2:
+                    logger.info(f"当前为模式{current_mode}，需要先切换到手动模式才能设置风扇等级")
+                    mode_result = miot_device.set_property_by(2, 4, 2)  # 切换到手动模式
+                    logger.info(f"已自动切换到手动模式: {mode_result}")
+            except Exception as mode_error:
+                logger.warning(f"获取/切换模式时出错，继续尝试设置风扇等级: {mode_error}")
+            
+            # 设置风扇等级
+            result = miot_device.set_property_by(2, 5, level)  # PIID 5: fan_level
             logger.info(f"风扇等级已设置为{level}档")
             return json.dumps({
-                "message": f"风扇等级已设置为{level}档",
+                "message": f"风扇等级已设置为{level}档（已切换到手动模式）",
                 "fan_level": level,
+                "mode": "手动模式",
                 "result": str(result)
             }, indent=2, ensure_ascii=False)
     except Exception as e:
