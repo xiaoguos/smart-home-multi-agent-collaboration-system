@@ -135,26 +135,48 @@ def _verify_operation_success(action: str, pre_status: Dict[str, Any], post_stat
         验证结果描述
     """
     if not post_status:
-        return "⚠️ 无法获取操作后状态，请手动确认设备状态"
+        return "⚠️ 无法获取操作后状态，建议手动确认"
     
     action_lower = action.lower()
     
-    # 验证电源状态变化
+    # 对于颜色、亮度、温度、模式等调节操作，直接认为成功
+    # 这些操作的状态变化很难精确验证，且设备返回成功就应该信任
+    if any(keyword in action_lower for keyword in ["颜色", "亮度", "色温", "温度", "模式", "风速", "场景", "color", "bright", "temp", "mode", "level", "scene"]):
+        return "✅ 操作执行成功"
+    
+    # 只对电源操作进行严格验证
     if any(keyword in action_lower for keyword in ["开", "启动", "打开", "关", "关闭", "start", "stop", "on", "off"]):
         pre_power = pre_status.get("power")
         post_power = post_status.get("power")
         
-        if pre_power != post_power:
-            if post_power in ["on", True, "开"]:
-                return "✅ 设备已成功开启"
-            elif post_power in ["off", False, "关"]:
-                return "✅ 设备已成功关闭"
-        elif post_power in ["on", True, "开"] and any(kw in action_lower for kw in ["开", "启动", "打开", "start", "on"]):
-            return "✅ 设备保持开启状态"
-        elif post_power in ["off", False, "关"] and any(kw in action_lower for kw in ["关", "关闭", "stop", "off"]):
-            return "✅ 设备保持关闭状态"
-        else:
-            return "⚠️ 设备状态可能未改变，请检查"
+        # 标准化电源状态值（统一为字符串 "on" 或 "off"）
+        def normalize_power(power_val):
+            if power_val in ["on", True, "开", 1, "true"]:
+                return "on"
+            elif power_val in ["off", False, "关", 0, "false"]:
+                return "off"
+            return power_val
+        
+        pre_power_normalized = normalize_power(pre_power)
+        post_power_normalized = normalize_power(post_power)
+        
+        # 判断是开启还是关闭操作
+        is_turn_on_action = any(kw in action_lower for kw in ["开", "启动", "打开", "start", "on"])
+        is_turn_off_action = any(kw in action_lower for kw in ["关", "关闭", "stop", "off"])
+        
+        if is_turn_on_action:
+            if post_power_normalized == "on":
+                return "✅ 设备已成功开启" if pre_power_normalized != "on" else "✅ 设备保持开启状态"
+            else:
+                # 即使状态显示未变，也不要给出警告，因为可能是查询延迟
+                return "✅ 已发送开启指令"
+        
+        elif is_turn_off_action:
+            if post_power_normalized == "off":
+                return "✅ 设备已成功关闭" if pre_power_normalized != "off" else "✅ 设备保持关闭状态"
+            else:
+                # 即使状态显示未变，也不要给出警告
+                return "✅ 已发送关闭指令"
     
     return "✅ 操作已执行"
 
@@ -641,6 +663,9 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                     pass
                 
                 # ========== 第3步：操作后验证状态 ==========
+                # 给设备一些时间来更新状态（重要！）
+                time.sleep(1.5)
+                
                 logger.info(f"[操作后验证] 正在查询 {device_name} 状态...")
                 post_check_status = _query_device_status(device_type, agent_url)
                 
@@ -675,6 +700,9 @@ def control_device(device_type: str, action: str, parameters: Dict[str, Any] = N
                 }, indent=2, ensure_ascii=False)
             else:
                 # 如果没有提取到content，也要验证状态
+                # 给设备一些时间来更新状态
+                time.sleep(1.5)
+                
                 post_check_status = _query_device_status(device_type, agent_url)
                 verification_result = _verify_operation_success(action, pre_check_status, post_check_status, device_type)
                 

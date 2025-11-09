@@ -38,6 +38,30 @@ def get_db_config():
     return _db_config
 
 
+def convert_numpy_types(obj):
+    """
+    递归转换 numpy 类型为 Python 原生类型，使其可以被 JSON 序列化
+    
+    Args:
+        obj: 任意对象
+        
+    Returns:
+        转换后的对象
+    """
+    if isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
+
+
 def get_db_connection():
     """获取数据库连接"""
     try:
@@ -240,10 +264,10 @@ def analyze_scene_patterns(
         scene_name = f"场景{label+1}_{time_period}"
 
         scenes[label] = {
-            "scene_id": label,
+            "scene_id": int(label),  # 转换 numpy.int64 为 int
             "scene_name": scene_name,
             "time_period": time_period,
-            "avg_hour": round(avg_hour, 1),
+            "avg_hour": float(round(avg_hour, 1)),  # 转换 numpy.float64 为 float
             "occurrence_count": len(scene_records),
             "device_actions": device_actions,
             "description": generate_scene_description(time_period, device_actions),
@@ -478,6 +502,8 @@ def query_user_scene_habits(
             print(f"   推荐状态: {'已生成' if recommendation else '无'}")
             print("="*80 + "\n")
 
+            # 转换 numpy 类型为 Python 原生类型，确保可以 JSON 序列化
+            result = convert_numpy_types(result)
             return json.dumps(result, ensure_ascii=False, indent=2)
 
         finally:
@@ -635,6 +661,8 @@ def get_data_mining_status() -> str:
                 ],
             }
 
+            # 转换 numpy 类型为 Python 原生类型
+            status_info = convert_numpy_types(status_info)
             return json.dumps(status_info, ensure_ascii=False, indent=2)
 
         finally:
@@ -969,7 +997,8 @@ def generate_recommendation_with_confidence(scene: Dict) -> Dict[str, Any]:
         "feedback_instruction": "您有5分钟时间对推荐操作进行调整，系统会学习您的偏好",
     }
 
-    total_ops = scene["occurrence_count"]
+    # 确保 total_ops 是 Python int
+    total_ops = int(scene["occurrence_count"])
 
     # 为每个设备生成具体建议（包含置信度）
     for device_type, actions in scene["device_actions"].items():
@@ -1003,9 +1032,9 @@ def generate_recommendation_with_confidence(scene: Dict) -> Dict[str, Any]:
                 "device_type": device_type,
                 "device_name": device_name,
                 "action": action,
-                "frequency": stats["count"],
+                "frequency": int(stats["count"]),  # 确保是 Python int
                 "parameters": stats["parameters"][0] if stats["parameters"] else {},
-                "confidence": confidence,  # 置信度分数
+                "confidence": float(confidence),  # 确保是 Python float
                 "confidence_level": (
                     "高" if confidence > 0.7 else ("中" if confidence > 0.4 else "低")
                 ),
@@ -1127,6 +1156,8 @@ def submit_user_feedback(
         print(f"   学习状态: 已更新")
         print("="*80 + "\n")
 
+        # 转换 numpy 类型为 Python 原生类型
+        result = convert_numpy_types(result)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     except Exception as e:

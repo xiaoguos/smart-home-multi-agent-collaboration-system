@@ -84,8 +84,8 @@ class BedsideLampAgent:
             logger.info(f"✅ 成功加载AI模型配置: {ai_config['model']}")
             self.model = ChatOpenAI(
                 model=ai_config['model'],
-                openai_api_key=ai_config['api_key'],
-                openai_api_base=ai_config['api_base'],
+                api_key=ai_config['api_key'],
+                base_url=ai_config['api_base'],
                 temperature=ai_config['temperature'],
             )
             

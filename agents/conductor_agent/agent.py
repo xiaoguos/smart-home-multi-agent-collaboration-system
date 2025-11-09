@@ -142,8 +142,8 @@ class ConductorAgent:
             ai_config = config_loader.get_default_ai_model_config()
             self.model = ChatOpenAI(
                 model=ai_config['model'],
-                openai_api_key=ai_config['api_key'],
-                openai_api_base=ai_config['api_base'],
+                api_key=ai_config['api_key'],
+                base_url=ai_config['api_base'],
                 temperature=ai_config['temperature'],
             )
             

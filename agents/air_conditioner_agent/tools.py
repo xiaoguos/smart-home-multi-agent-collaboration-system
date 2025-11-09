@@ -95,10 +95,21 @@ def get_device_config(device_name: str = DEFAULT_AC_NAME, system_user_id: int = 
     
     # 尝试通过 MCP 获取
     try:
-        loop = asyncio.get_event_loop()
-        device_info = loop.run_until_complete(
-            get_device_info_from_mcp(system_user_id, device_name)
-        )
+        # 在线程池中需要创建新的事件循环
+        try:
+            device_info = asyncio.run(
+                get_device_info_from_mcp(system_user_id, device_name)
+            )
+        except RuntimeError:
+            # 如果已经有事件循环在运行，创建新的
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                device_info = loop.run_until_complete(
+                    get_device_info_from_mcp(system_user_id, device_name)
+                )
+            finally:
+                loop.close()
         
         if device_info:
             config = {

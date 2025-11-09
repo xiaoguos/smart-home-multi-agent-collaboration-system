@@ -106,28 +106,12 @@ def query_xiaomi_credentials(system_user_id: int) -> Optional[Dict[str, Any]]:
         connection.close()
 
 
-@mcp.tool()
-async def get_user_devices(
+async def _fetch_user_devices(
     system_user_id: int,
     server: Optional[str] = None
 ) -> str:
     """
-    获取用户的所有米家设备列表
-    
-    参数：
-        system_user_id: 系统用户ID（必填）
-        server: 服务器区域（可选），默认使用数据库中保存的区域，可选值：cn, de, us, ru, tw, sg, in, i2
-    
-    返回：
-        包含所有设备信息的JSON字符串，包括：
-        - 设备名称 (name)
-        - 设备ID (did)
-        - 设备型号 (model)
-        - 设备Token (token)
-        - 设备IP地址 (localip)
-        - 设备MAC地址 (mac)
-        - 在线状态 (isOnline)
-        - 所属家庭 (home_name, home_id)
+    内部函数：获取用户的所有米家设备列表（供其他函数调用）
     """
     try:
         logger.info(f"查询用户 {system_user_id} 的设备列表")
@@ -220,6 +204,32 @@ async def get_user_devices(
 
 
 @mcp.tool()
+async def get_user_devices(
+    system_user_id: int,
+    server: Optional[str] = None
+) -> str:
+    """
+    获取用户的所有米家设备列表
+    
+    参数：
+        system_user_id: 系统用户ID（必填）
+        server: 服务器区域（可选），默认使用数据库中保存的区域，可选值：cn, de, us, ru, tw, sg, in, i2
+    
+    返回：
+        包含所有设备信息的JSON字符串，包括：
+        - 设备名称 (name)
+        - 设备ID (did)
+        - 设备型号 (model)
+        - 设备Token (token)
+        - 设备IP地址 (localip)
+        - 设备MAC地址 (mac)
+        - 在线状态 (isOnline)
+        - 所属家庭 (home_name, home_id)
+    """
+    return await _fetch_user_devices(system_user_id, server)
+
+
+@mcp.tool()
 async def get_device_by_name(
     system_user_id: int,
     device_name: str,
@@ -238,7 +248,7 @@ async def get_device_by_name(
     """
     try:
         # 先获取所有设备
-        all_devices_result = await get_user_devices(system_user_id, server)
+        all_devices_result = await _fetch_user_devices(system_user_id, server)
         all_devices_data = json.loads(all_devices_result)
         
         if not all_devices_data.get("success"):
@@ -292,7 +302,7 @@ async def get_device_by_model(
     """
     try:
         # 先获取所有设备
-        all_devices_result = await get_user_devices(system_user_id, server)
+        all_devices_result = await _fetch_user_devices(system_user_id, server)
         all_devices_data = json.loads(all_devices_result)
         
         if not all_devices_data.get("success"):
@@ -344,7 +354,7 @@ async def get_online_devices(
     """
     try:
         # 先获取所有设备
-        all_devices_result = await get_user_devices(system_user_id, server)
+        all_devices_result = await _fetch_user_devices(system_user_id, server)
         all_devices_data = json.loads(all_devices_result)
         
         if not all_devices_data.get("success"):
@@ -396,7 +406,7 @@ async def get_device_count(
     """
     try:
         # 先获取所有设备
-        all_devices_result = await get_user_devices(system_user_id, server)
+        all_devices_result = await _fetch_user_devices(system_user_id, server)
         all_devices_data = json.loads(all_devices_result)
         
         if not all_devices_data.get("success"):
