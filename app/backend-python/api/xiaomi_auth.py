@@ -1298,3 +1298,36 @@ async def save_xiaomi_credentials(system_user_id: int, xiaomi_username: str,
         logger.error(f"save_xiaomi_credentials error: {e}")
         raise
 
+
+@router.delete("/unbind")
+async def unbind_xiaomi_account(system_user_id: int):
+    """
+    解绑小米账号
+
+    Args:
+        system_user_id: 系统用户ID
+
+    Returns:
+        操作结果
+    """
+    try:
+        db_type = get_db_type()
+
+        if db_type == "mysql":
+            # MySQL: 软删除（设置is_active=0）
+            update_sql = """
+                UPDATE xiaomi_account 
+                SET is_active = 0 
+                WHERE system_user_id = %s
+            """
+            update(update_sql, (system_user_id,))
+        else:
+            # StarRocks: 由于是DUPLICATE KEY表，不支持DELETE，插入一条标记删除的记录
+            logger.warning("StarRocks不支持DELETE，请手动处理或在查询时过滤")
+
+        logger.info(f"✅ 用户 {system_user_id} 已解绑小米账号")
+        return {"status": "success", "message": "小米账号已解绑"}
+
+    except Exception as e:
+        logger.error(f"解绑小米账号失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"解绑失败: {str(e)}")

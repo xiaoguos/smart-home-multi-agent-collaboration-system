@@ -24,6 +24,10 @@ from tools import (
     list_xiaomi_devices,
     search_baidu_ai
 )
+from dida_tools import (
+    manage_dida_task,
+    manage_dida_project
+)
 
 memory = MemorySaver()
 
@@ -169,7 +173,9 @@ class ConductorAgent:
             get_user_insights,
             query_data_mining_agent,
             list_xiaomi_devices, 
-            search_baidu_ai  # 百度AI搜索保底方案
+            search_baidu_ai,  # 百度AI搜索保底方案
+            manage_dida_task,  # 滴答清单任务管理
+            manage_dida_project  # 滴答清单项目管理
         ]
 
         self.graph = create_react_agent(

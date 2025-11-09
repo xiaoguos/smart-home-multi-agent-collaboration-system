@@ -6,6 +6,7 @@ import About from "@/pages/About";
 import Welcome from "@/pages/Welcome";
 import WechatCallback from "@/pages/WechatCallback";
 import XiaomiBinding from "@/pages/XiaomiBinding";
+import DidaBinding from "@/pages/DidaBinding";
 import AccountSetting from "@/pages/AccountSetting";
 
 export const routes = createBrowserRouter([
@@ -42,6 +43,10 @@ export const routes = createBrowserRouter([
   {
     path: "/xiaomi-binding",
     element: <XiaomiBinding />,
+  },
+  {
+    path: "/dida-binding",
+    element: <DidaBinding />,
   },
   {
     path: "/auth/wechat/callback",
