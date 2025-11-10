@@ -34,6 +34,11 @@ from wechat_tools import (
     send_multiple_wechat_messages,
     send_wechat_to_multiple_friends
 )
+from windows_tools import (
+    manage_windows_app,
+    execute_powershell_command,
+    execute_windows_shortcut
+)
 
 memory = MemorySaver()
 
@@ -185,7 +190,10 @@ class ConductorAgent:
             get_wechat_chat_history,  # 微信聊天记录获取
             send_wechat_message,  # 微信消息发送
             send_multiple_wechat_messages,  # 批量发送微信消息
-            send_wechat_to_multiple_friends  # 群发微信消息
+            send_wechat_to_multiple_friends,  # 群发微信消息
+            manage_windows_app,  # Windows应用管理
+            execute_powershell_command,  # PowerShell命令执行
+            execute_windows_shortcut  # Windows快捷键
         ]
 
         self.graph = create_react_agent(
