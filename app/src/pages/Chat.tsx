@@ -12,6 +12,8 @@ import {
 import { App, Button, Space, Alert, List, Typography, Drawer, Tooltip, Spin, Input, Modal } from "antd";
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import "./style/chat.sass";
 import { sendChatMessage } from "../api/chat";
 import { checkBindingStatus } from "../api/xiaomi";
@@ -446,18 +448,35 @@ const Chat: React.FC = () => {
     },
   };
 
+  // 渲染消息内容（支持Markdown）
+  const renderMessageContent = (content: string, role: string): React.ReactNode => {
+    if (role === "ai") {
+      // AI消息使用Markdown渲染
+      const MarkdownComponent = Markdown as any;
+      return (
+        <div className="markdown-content">
+          <MarkdownComponent remarkPlugins={[remarkGfm]}>
+            {content}
+          </MarkdownComponent>
+        </div>
+      );
+    }
+    // 用户消息保持纯文本
+    return content;
+  };
+
   // 构建气泡列表数据
   const bubbleItems = [
     {
       key: "welcome",
       role: "ai",
-      content: "您好！我是 Moss AI 智能家居助手，可以帮您控制和管理所有智能设备。",
+      content: renderMessageContent("您好！我是 Moss AI 智能家居助手，可以帮您控制和管理所有智能设备。", "ai"),
     },
     ...messages.map((msg, index) => {
       const item: any = {
         key: msg.key,
         role: msg.role,
-        content: msg.content,
+        content: renderMessageContent(msg.content, msg.role),
       };
 
       // 为所有消息添加复制按钮

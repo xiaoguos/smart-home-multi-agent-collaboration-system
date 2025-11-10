@@ -155,3 +155,14 @@ export const getXiaomiDevices = async (systemUserId: number, server: string = 'c
   return await httpClient.get<XiaomiDevicesResponse>(`/api/v1/xiaomi/devices?system_user_id=${systemUserId}&server=${server}`);
 };
 
+/**
+ * 解绑小米账号
+ * @param system_user_id 系统用户ID
+ * @returns 操作结果
+ */
+export const unbindXiaomiAccount = async (system_user_id: number): Promise<{ status: string; message: string }> => {
+  return httpClient.delete('/api/v1/xiaomi/unbind', {
+    params: { system_user_id }
+  });
+};
+

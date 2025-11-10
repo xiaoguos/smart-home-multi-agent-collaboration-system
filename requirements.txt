@@ -56,5 +56,26 @@ fastmcp>=0.5.0
 
 # Windows 平台特定依赖 (可选)
 # psutil>=5.9.0
+
+# 机器学习和NLP
 scikit-learn
 numpy
+jieba
+
+# 微信MCP服务依赖 (Windows)
+pywechat127>=1.8.8
+pyautogui>=0.9.54
+pywinauto==0.6.9
+
+# Windows MCP服务依赖 (Windows系统自动化 - 需要 Python 3.13+)
+click>=8.2.1
+fuzzywuzzy>=0.18.0
+humancursor>=1.1.5
+live-inspect>=0.1.1
+markdownify>=1.1.0
+pdfplumber>=0.11.7
+psutil>=7.0.0
+pygetwindow>=0.0.9
+python-levenshtein>=0.27.1
+tabulate>=0.9.0
+uiautomation>=2.0.24

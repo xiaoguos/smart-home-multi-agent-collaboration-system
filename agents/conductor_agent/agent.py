@@ -24,6 +24,21 @@ from tools import (
     list_xiaomi_devices,
     search_baidu_ai
 )
+from dida_tools import (
+    manage_dida_task,
+    manage_dida_project
+)
+from wechat_tools import (
+    get_wechat_chat_history,
+    send_wechat_message,
+    send_multiple_wechat_messages,
+    send_wechat_to_multiple_friends
+)
+from windows_tools import (
+    manage_windows_app,
+    execute_powershell_command,
+    execute_windows_shortcut
+)
 
 memory = MemorySaver()
 
@@ -169,7 +184,16 @@ class ConductorAgent:
             get_user_insights,
             query_data_mining_agent,
             list_xiaomi_devices, 
-            search_baidu_ai  # 百度AI搜索保底方案
+            search_baidu_ai,  # 百度AI搜索保底方案
+            manage_dida_task,  # 滴答清单任务管理
+            manage_dida_project,  # 滴答清单项目管理
+            get_wechat_chat_history,  # 微信聊天记录获取
+            send_wechat_message,  # 微信消息发送
+            send_multiple_wechat_messages,  # 批量发送微信消息
+            send_wechat_to_multiple_friends,  # 群发微信消息
+            manage_windows_app,  # Windows应用管理
+            execute_powershell_command,  # PowerShell命令执行
+            execute_windows_shortcut  # Windows快捷键
         ]
 
         self.graph = create_react_agent(

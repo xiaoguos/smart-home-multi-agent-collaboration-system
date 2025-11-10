@@ -116,8 +116,6 @@ async def get_conversations(
             only_active=only_active
         )
         
-        logger.info(f"✅ 获取对话列表成功: 共 {len(conversations)} 条")
-        
         return {
             "success": True,
             "message": "获取对话列表成功",
@@ -126,7 +124,6 @@ async def get_conversations(
         }
         
     except Exception as e:
-        logger.error(f"❌ 获取对话列表失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -155,8 +152,6 @@ async def get_conversation(context_id: str):
                 }
             )
         
-        logger.info(f"✅ 获取对话详情成功: {conversation['title']}")
-        
         return {
             "success": True,
             "message": "获取对话详情成功",
@@ -166,7 +161,6 @@ async def get_conversation(context_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 获取对话详情失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -182,8 +176,6 @@ async def update_conversation(request: UpdateConversationRequest):
     更新对话信息（如标题）
     """
     try:
-        logger.info(f"✏️ 更新对话: context={request.context_id}")
-        
         success = await conversation_service.update_conversation(
             context_id=request.context_id,
             title=request.title
@@ -198,8 +190,6 @@ async def update_conversation(request: UpdateConversationRequest):
                 }
             )
         
-        logger.info(f"✅ 更新对话成功: context={request.context_id}")
-        
         return {
             "success": True,
             "message": "更新对话成功"
@@ -208,7 +198,6 @@ async def update_conversation(request: UpdateConversationRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 更新对话失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -224,8 +213,6 @@ async def delete_conversation(request: DeleteConversationRequest):
     删除对话（软删除）
     """
     try:
-        logger.info(f"🗑️ 删除对话: context={request.context_id}")
-        
         success = await conversation_service.delete_conversation(
             context_id=request.context_id,
             system_user_id=request.system_user_id,
@@ -241,8 +228,6 @@ async def delete_conversation(request: DeleteConversationRequest):
                 }
             )
         
-        logger.info(f"✅ 删除对话成功: context={request.context_id}")
-        
         return {
             "success": True,
             "message": "删除对话成功"
@@ -251,7 +236,6 @@ async def delete_conversation(request: DeleteConversationRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 删除对话失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -283,8 +267,6 @@ async def get_conversation_history(
         messages = list(messages) if not isinstance(messages, list) else messages
         messages.reverse()
         
-        logger.info(f"✅ 获取对话历史成功: 共 {len(messages)} 条消息")
-        
         return {
             "success": True,
             "message": "获取对话历史成功",
@@ -293,7 +275,6 @@ async def get_conversation_history(
         }
         
     except Exception as e:
-        logger.error(f"❌ 获取对话历史失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
