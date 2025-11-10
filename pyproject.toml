@@ -65,6 +65,9 @@ dev = [
 
 windows = [
     "psutil>=5.9.0",
+    "pywechat127>=1.8.8",
+    "pyautogui>=0.9.54",
+    "pywinauto==0.6.9",
 ]
 
 [build-system]

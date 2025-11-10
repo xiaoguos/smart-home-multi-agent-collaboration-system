@@ -28,6 +28,12 @@ from dida_tools import (
     manage_dida_task,
     manage_dida_project
 )
+from wechat_tools import (
+    get_wechat_chat_history,
+    send_wechat_message,
+    send_multiple_wechat_messages,
+    send_wechat_to_multiple_friends
+)
 
 memory = MemorySaver()
 
@@ -175,7 +181,11 @@ class ConductorAgent:
             list_xiaomi_devices, 
             search_baidu_ai,  # 百度AI搜索保底方案
             manage_dida_task,  # 滴答清单任务管理
-            manage_dida_project  # 滴答清单项目管理
+            manage_dida_project,  # 滴答清单项目管理
+            get_wechat_chat_history,  # 微信聊天记录获取
+            send_wechat_message,  # 微信消息发送
+            send_multiple_wechat_messages,  # 批量发送微信消息
+            send_wechat_to_multiple_friends  # 群发微信消息
         ]
 
         self.graph = create_react_agent(

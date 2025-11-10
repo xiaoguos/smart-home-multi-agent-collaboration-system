@@ -56,6 +56,13 @@ fastmcp>=0.5.0
 
 # Windows 平台特定依赖 (可选)
 # psutil>=5.9.0
+
+# 机器学习和NLP
 scikit-learn
 numpy
 jieba
+
+# 微信MCP服务依赖 (Windows)
+pywechat127>=1.8.8
+pyautogui>=0.9.54
+pywinauto==0.6.9
