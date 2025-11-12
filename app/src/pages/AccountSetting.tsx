@@ -12,7 +12,6 @@ const { Title, Text } = Typography;
 
 const AccountSetting: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [xiaomiLoading, setXiaomiLoading] = useState(false);
   const [didaLoading, setDidaLoading] = useState(false);
   const [bindingStatus, setBindingStatus] = useState<BindingStatus | null>(null);

@@ -31,9 +31,6 @@ const DidaBinding: React.FC = () => {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [clientId, setClientId] = useState<string>("");
-  const [clientSecret, setClientSecret] = useState<string>("");
-  const [authorizationCode, setAuthorizationCode] = useState<string>("");
   const [oauthUrl, setOauthUrl] = useState<string>("");
   
   // 使用useRef而不是useState，立即生效，避免React渲染延迟导致重复请求
@@ -54,7 +51,6 @@ const DidaBinding: React.FC = () => {
       
       // 记录已处理的code，防止重复
       processedCodeRef.current = code;
-      setAuthorizationCode(code);
       
       // 注意：不要立即清除URL，保留code参数供后续处理
       // URL清除会在成功绑定后进行
@@ -64,8 +60,6 @@ const DidaBinding: React.FC = () => {
       const savedClientSecret = localStorage.getItem("dida_client_secret");
       
       if (savedClientId && savedClientSecret) {
-        setClientId(savedClientId);
-        setClientSecret(savedClientSecret);
         setCurrentStep(2); // 跳到第3步（处理授权）
         
         // 立即调用，不需要延迟
@@ -87,9 +81,7 @@ const DidaBinding: React.FC = () => {
       const cid = values.client_id.trim();
       const secret = values.client_secret.trim();
       
-      // 保存到状态和localStorage
-      setClientId(cid);
-      setClientSecret(secret);
+      // 保存到localStorage
       localStorage.setItem("dida_client_id", cid);
       localStorage.setItem("dida_client_secret", secret);
       
