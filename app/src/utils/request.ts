@@ -230,5 +230,4 @@ class HttpClient {
 
 const httpClient = new HttpClient();
 
-export { httpClient };
 export default httpClient;
