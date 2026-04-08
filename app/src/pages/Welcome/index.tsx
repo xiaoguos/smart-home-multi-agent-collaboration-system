@@ -28,8 +28,8 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { WECHAT_CONFIG, generateWechatLoginUrl, generateSceneId } from "@/config/wechat";
-import { login, register, saveUserInfo, isLoggedIn } from "../api/auth";
+import { WECHAT_CONFIG, generateWechatLoginUrl, generateSceneId } from "@/contant/wechat";
+import { login, register, saveUserInfo, isLoggedIn } from "@api/auth";
 import "./style/welcome.sass";
 
 const { Title, Paragraph } = Typography;

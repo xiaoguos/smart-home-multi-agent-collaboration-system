@@ -1,0 +1,20 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# Tauri（Rust）与非 TS 前端源码
+src-tauri/
+
+# 同仓库内的后端与其它语言实现
+backend-python/
+backend-cangjie/
+
+# 锁文件（非 JS/TS）
+pnpm-lock.yaml
+bun.lock
+package-lock.json
+
+# 本地环境文件
+.env
+.env.*
+!.env.example

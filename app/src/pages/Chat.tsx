@@ -22,7 +22,8 @@ import {
   getConversationHistory,
   updateConversation,
   deleteConversation,
-  type Conversation,
+  Conversation,
+  ChatMessage,
 } from "../api/conversation";
 
 const { Text } = Typography;
@@ -171,7 +172,9 @@ const Chat: React.FC = () => {
       setConversations(listResponse.data);
       
       // 从最新列表中找到当前对话
-      const updatedConversation = listResponse.data.find(c => c.context_id === targetContextId);
+      const updatedConversation = listResponse.data.find(
+        (c: Conversation) => c.context_id === targetContextId,
+      );
       setCurrentConversation(updatedConversation || conversation);
       contextId.current = targetContextId;
       setIsTemporaryConversation(false);
@@ -185,8 +188,10 @@ const Chat: React.FC = () => {
       // 转换并显示历史消息
       if (historyResponse.data && Array.isArray(historyResponse.data)) {
         const historyMessages: Message[] = historyResponse.data
-          .filter(msg => msg.role === 'user' || msg.role === 'agent')
-          .map((msg, index) => ({
+          .filter(
+            (msg: ChatMessage) => msg.role === "user" || msg.role === "agent",
+          )
+          .map((msg: ChatMessage, index: number) => ({
             key: index,
             role: msg.role === 'agent' ? 'ai' : 'user',
             content: msg.content
@@ -311,7 +316,7 @@ const Chat: React.FC = () => {
           // 没有对话记录，创建临时对话
           createTemporaryConversation();
         }
-      } catch (error) {
+      } catch {
         createTemporaryConversation();
       }
     };

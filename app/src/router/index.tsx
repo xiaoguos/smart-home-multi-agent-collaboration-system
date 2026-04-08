@@ -1,5 +1,5 @@
 import { createBrowserRouter, redirect } from "react-router-dom";
-import App from "@/App";
+import { RootLayout } from "@/layout";
 import Setting from "@/pages/Setting";
 import Chat from "@/pages/Chat";
 import About from "@/pages/About";
@@ -9,10 +9,10 @@ import XiaomiBinding from "@/pages/XiaomiBinding";
 import DidaBinding from "@/pages/DidaBinding";
 import AccountSetting from "@/pages/AccountSetting";
 
-export const routes = createBrowserRouter([
+export const router = createBrowserRouter([
   {
     path: "/",
-    element: <App />,
+    element: <RootLayout />,
     children: [
       {
         index: true,
@@ -53,3 +53,5 @@ export const routes = createBrowserRouter([
     element: <WechatCallback />,
   },
 ]);
+
+export default router;

@@ -1,34 +1,11 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import {
+  HttpClientConfig,
+  RequestInterceptor,
+  ResponseInterceptor,
+} from "./types/request";
 
-/**
- * HTTP 请求配置接口
- */
-export interface HttpClientConfig {
-  baseURL?: string;
-  timeout?: number;
-  headers?: Record<string, string>;
-}
-
-/**
- * 请求拦截器配置
- */
-export interface RequestInterceptor {
-  onFulfilled?: (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>;
-  onRejected?: (error: any) => any;
-}
-
-/**
- * 响应拦截器配置
- */
-export interface ResponseInterceptor {
-  onFulfilled?: (response: AxiosResponse) => AxiosResponse | Promise<AxiosResponse>;
-  onRejected?: (error: AxiosError) => any;
-}
-
-/**
- * HTTP 客户端类 - Axios 二次封装
- */
-export class HttpClient {
+class HttpClient {
   private instance: AxiosInstance;
   private config: HttpClientConfig;
 
@@ -37,7 +14,7 @@ export class HttpClient {
       baseURL: import.meta.env.VITE_BACKEND_URL,
       timeout: 120000, // 120 秒超时
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       ...config,
     };
@@ -57,7 +34,7 @@ export class HttpClient {
       },
       (error) => {
         return Promise.reject(error);
-      }
+      },
     );
 
     // 响应拦截器
@@ -67,7 +44,7 @@ export class HttpClient {
       },
       (error) => {
         return Promise.reject(error);
-      }
+      },
     );
   }
 
@@ -77,7 +54,7 @@ export class HttpClient {
   addRequestInterceptor(interceptor: RequestInterceptor): number {
     return this.instance.interceptors.request.use(
       interceptor.onFulfilled,
-      interceptor.onRejected
+      interceptor.onRejected,
     );
   }
 
@@ -87,7 +64,7 @@ export class HttpClient {
   addResponseInterceptor(interceptor: ResponseInterceptor): number {
     return this.instance.interceptors.response.use(
       interceptor.onFulfilled,
-      interceptor.onRejected
+      interceptor.onRejected,
     );
   }
 
@@ -120,7 +97,11 @@ export class HttpClient {
   /**
    * POST 请求
    */
-  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
     try {
       const response = await this.instance.post<T>(url, data, config);
       return response.data;
@@ -132,7 +113,11 @@ export class HttpClient {
   /**
    * PUT 请求
    */
-  async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
     try {
       const response = await this.instance.put<T>(url, data, config);
       return response.data;
@@ -156,7 +141,11 @@ export class HttpClient {
   /**
    * PATCH 请求
    */
-  async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
     try {
       const response = await this.instance.patch<T>(url, data, config);
       return response.data;
@@ -182,21 +171,23 @@ export class HttpClient {
    */
   private handleError(error: any): Error {
     // 处理请求取消错误
-    if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+    if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
       return error; // 直接返回原始的 AbortError，保持 name 属性
     }
-    
-    if (error.code === 'ECONNREFUSED') {
-      return new Error('无法连接到服务器，请确保服务已启动');
-    } else if (error.code === 'ETIMEDOUT') {
-      return new Error('请求超时');
+
+    if (error.code === "ECONNREFUSED") {
+      return new Error("无法连接到服务器，请确保服务已启动");
+    } else if (error.code === "ETIMEDOUT") {
+      return new Error("请求超时");
     } else if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
-      return new Error(detail.message || detail || '请求失败');
+      return new Error(detail.message || detail || "请求失败");
     } else if (error.response?.data?.error) {
-      return new Error(`服务器返回错误: ${error.response.data.error.message || '未知错误'}`);
+      return new Error(
+        `服务器返回错误: ${error.response.data.error.message || "未知错误"}`,
+      );
     } else {
-      return new Error(error.message || '请求失败');
+      return new Error(error.message || "请求失败");
     }
   }
 
@@ -215,7 +206,10 @@ export class HttpClient {
     this.instance.defaults.baseURL = this.config.baseURL;
     this.instance.defaults.timeout = this.config.timeout;
     if (this.config.headers) {
-      this.instance.defaults.headers = { ...this.instance.defaults.headers, ...this.config.headers };
+      this.instance.defaults.headers = {
+        ...this.instance.defaults.headers,
+        ...this.config.headers,
+      };
     }
   }
 
@@ -234,9 +228,7 @@ export class HttpClient {
   }
 }
 
-// 创建默认的 HTTP 客户端实例
-export const httpClient = new HttpClient();
+const httpClient = new HttpClient();
 
-// 为了向后兼容，导出原来的 backendClient
-export const backendClient = httpClient.getInstance();
-
+export { httpClient };
+export default httpClient;
