@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsc && vite",
-    "build": "tsc && vite build",
+    "dev": "tsc && vite --mode development",
+    "build": "tsc && vite build --mode production",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "oxlint --ignore-path=.oxlintignore",
