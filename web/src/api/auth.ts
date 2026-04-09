@@ -2,7 +2,7 @@
  * 用户认证 API
  */
 
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 /** 用户注册请求 */
 export interface RegisterRequest {

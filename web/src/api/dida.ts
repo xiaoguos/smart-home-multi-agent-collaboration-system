@@ -1,4 +1,4 @@
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 // 滴答清单OAuth请求
 export interface DidaOAuthRequest {

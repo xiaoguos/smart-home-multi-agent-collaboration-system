@@ -2,7 +2,7 @@
  * 对话列表管理 API
  */
 
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 export interface Conversation {
   id: number;

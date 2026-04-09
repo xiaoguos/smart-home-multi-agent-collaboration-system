@@ -1,12 +1,13 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import {
   HttpClientConfig,
   RequestInterceptor,
   ResponseInterceptor,
-} from "./types/request";
+} from './types/request';
 
 class HttpClient {
   private instance: AxiosInstance;
+
   private config: HttpClientConfig;
 
   constructor(config: HttpClientConfig = {}) {
@@ -14,7 +15,7 @@ class HttpClient {
       baseURL: import.meta.env.VITE_BACKEND_URL,
       timeout: 120000, // 120 秒超时
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       ...config,
     };
@@ -171,23 +172,23 @@ class HttpClient {
    */
   private handleError(error: any): Error {
     // 处理请求取消错误
-    if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
+    if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
       return error; // 直接返回原始的 AbortError，保持 name 属性
     }
 
-    if (error.code === "ECONNREFUSED") {
-      return new Error("无法连接到服务器，请确保服务已启动");
-    } else if (error.code === "ETIMEDOUT") {
-      return new Error("请求超时");
+    if (error.code === 'ECONNREFUSED') {
+      return new Error('无法连接到服务器，请确保服务已启动');
+    } else if (error.code === 'ETIMEDOUT') {
+      return new Error('请求超时');
     } else if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
-      return new Error(detail.message || detail || "请求失败");
+      return new Error(detail.message || detail || '请求失败');
     } else if (error.response?.data?.error) {
       return new Error(
-        `服务器返回错误: ${error.response.data.error.message || "未知错误"}`,
+        `服务器返回错误: ${error.response.data.error.message || '未知错误'}`,
       );
     } else {
-      return new Error(error.message || "请求失败");
+      return new Error(error.message || '请求失败');
     }
   }
 

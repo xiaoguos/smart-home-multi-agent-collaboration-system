@@ -36,7 +36,6 @@ export const RootLayout: React.FC = () => {
     if (path === "/" || path === "/chat") return ["chat"];
     if (path === "/about") return ["about"];
     if (path === "/setting") return ["setting"];
-    if (path === "/welcome") return [];
     return ["chat"];
   };
 

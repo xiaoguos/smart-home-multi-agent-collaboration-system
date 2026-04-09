@@ -1,4 +1,4 @@
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 /**
  * 聊天消息接口

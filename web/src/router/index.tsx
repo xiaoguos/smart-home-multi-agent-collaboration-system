@@ -11,16 +11,16 @@ import AccountSetting from "@/pages/AccountSetting";
 
 export const router = createBrowserRouter([
   {
+    path: "/welcome",
+    element: <Welcome />,
+  },
+  {
     path: "/",
     element: <RootLayout />,
     children: [
       {
         index: true,
         loader: () => redirect("/welcome"),
-      },
-      {
-        path: "welcome",
-        element: <Welcome />,
       },
       {
         path: "chat",

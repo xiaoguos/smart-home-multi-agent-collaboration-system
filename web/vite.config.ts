@@ -13,6 +13,7 @@ export default defineConfig(async ({ mode }) => {
     alias: {
       "@": "/src",
       "@api": "/src/api",
+      "@assets": "/src/assets",
       "@component": "/src/components",
       "@pages": "/src/pages",
     },

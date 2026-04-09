@@ -1,4 +1,4 @@
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 /**
  * 配置管理 API 接口
@@ -130,8 +130,8 @@ export async function getDevices(
   isActive?: boolean
 ): Promise<Device[]> {
   const params: any = {};
-  if (deviceType) params.device_type = deviceType;
-  if (isActive !== undefined) params.is_active = isActive;
+  if (deviceType) { params.device_type = deviceType }
+  if (isActive !== undefined) { params.is_active = isActive }
   return await httpClient.get('/api/v1/config/devices', { params });
 }
 

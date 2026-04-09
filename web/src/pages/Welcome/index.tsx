@@ -24,10 +24,31 @@ import {
   LockOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { login, register, saveUserInfo, isLoggedIn } from '@api/auth';
-import './style/welcome.sass';
+import {
+  login,
+  register,
+  saveUserInfo,
+  isLoggedIn,
+} from '@api/auth';
+import type { UserInfo } from '@api/auth';
+import './styles/index.sass';
 
 const { Title, Paragraph } = Typography;
+
+/** 开发环境跳过真实登录/注册接口，仅写入本地模拟会话 */
+const isDevSkipAuth = import.meta.env.DEV;
+
+function buildDevMockUser(partial: {
+  username: string;
+  nickname?: string;
+}): UserInfo {
+  return {
+    id: 0,
+    username: partial.username,
+    nickname: partial.nickname ?? partial.username,
+    created_at: new Date().toISOString(),
+  };
+}
 
 const Welcome: React.FC = () => {
   const navigate = useNavigate();
@@ -48,6 +69,14 @@ const Welcome: React.FC = () => {
     username: string;
     password: string;
   }) => {
+    if (isDevSkipAuth) {
+      const user = buildDevMockUser({ username: values.username });
+      saveUserInfo('dev-mock-token', user);
+      message.success('开发环境：已跳过登录接口，进入对话');
+      navigate('/chat');
+      return;
+    }
+
     try {
       const response = await login({
         username: values.username,
@@ -82,6 +111,17 @@ const Welcome: React.FC = () => {
     email?: string;
     nickname?: string;
   }) => {
+    if (isDevSkipAuth) {
+      const user = buildDevMockUser({
+        username: values.username,
+        nickname: values.nickname,
+      });
+      saveUserInfo('dev-mock-token', user);
+      message.success('开发环境：已跳过注册接口，进入对话');
+      navigate('/chat');
+      return;
+    }
+
     try {
       const response = await register({
         username: values.username,

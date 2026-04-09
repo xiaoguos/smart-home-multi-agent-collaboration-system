@@ -2,7 +2,7 @@
  * 小米账号认证 API
  */
 
-import { httpClient } from '../utils/request';
+import { httpClient } from '@/utils';
 
 /** 小米登录请求 */
 export interface XiaomiLoginRequest {
