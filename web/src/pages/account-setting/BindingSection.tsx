@@ -7,7 +7,8 @@ import {
   ExclamationCircleOutlined,
   HomeOutlined,
   CheckSquareOutlined,
-  ThunderboltOutlined,
+  RocketOutlined,
+  CloudOutlined,
   RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -22,11 +23,12 @@ export interface BindingSectionProps {
   userInfo: UserInfo | null;
 }
 
-type ConfigKey = "xiaomi" | "dida" | "claw";
+type ConfigKey = "xiaomi" | "dida" | "openclaw" | "zeroclaw";
 
 const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
   const navigate = useNavigate();
-  const [clawForm] = Form.useForm();
+  const [openClawForm] = Form.useForm();
+  const [zeroClawForm] = Form.useForm();
   const [xiaomiLoading, setXiaomiLoading] = useState(false);
   const [didaLoading, setDidaLoading] = useState(false);
   const [bindingStatus, setBindingStatus] = useState<BindingStatus | null>(null);
@@ -48,11 +50,9 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
   useEffect(() => {
     if (!userInfo?.id) return;
     const s = getClawSettings(userInfo.id);
-    clawForm.setFieldsValue({
-      openclawUrl: s.openclawUrl,
-      zeroclawUrl: s.zeroclawUrl,
-    });
-  }, [userInfo?.id, clawForm]);
+    openClawForm.setFieldsValue({ openclawUrl: s.openclawUrl });
+    zeroClawForm.setFieldsValue({ zeroclawUrl: s.zeroclawUrl });
+  }, [userInfo?.id, openClawForm, zeroClawForm]);
 
   const loadBindingStatus = async () => {
     if (!userInfo) return;
@@ -109,18 +109,35 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
 
   const handleBindDida = () => navigate("/dida-binding");
 
-  const handleSaveClaw = async () => {
+  const handleSaveOpenClaw = async () => {
     if (!userInfo) return;
     try {
-      const v = await clawForm.validateFields();
+      const v = await openClawForm.validateFields();
       const openclawUrl = String(v.openclawUrl ?? "").trim();
-      const zeroclawUrl = String(v.zeroclawUrl ?? "").trim();
-      if (!isValidEmbedUrl(openclawUrl) || !isValidEmbedUrl(zeroclawUrl)) {
+      if (!isValidEmbedUrl(openclawUrl)) {
         message.error("地址需为 http:// 或 https:// 开头的合法 URL");
         return;
       }
-      setClawSettings(userInfo.id, { openclawUrl, zeroclawUrl });
-      message.success("Claw 嵌入地址已保存");
+      const prev = getClawSettings(userInfo.id);
+      setClawSettings(userInfo.id, { openclawUrl, zeroclawUrl: prev.zeroclawUrl });
+      message.success("OpenClaw 地址已保存");
+    } catch {
+      /* 表单校验未通过 */
+    }
+  };
+
+  const handleSaveZeroClaw = async () => {
+    if (!userInfo) return;
+    try {
+      const v = await zeroClawForm.validateFields();
+      const zeroclawUrl = String(v.zeroclawUrl ?? "").trim();
+      if (!isValidEmbedUrl(zeroclawUrl)) {
+        message.error("地址需为 http:// 或 https:// 开头的合法 URL");
+        return;
+      }
+      const prev = getClawSettings(userInfo.id);
+      setClawSettings(userInfo.id, { openclawUrl: prev.openclawUrl, zeroclawUrl });
+      message.success("ZeroClaw 地址已保存");
     } catch {
       /* 表单校验未通过 */
     }
@@ -149,18 +166,23 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     });
   };
 
-  const clawConfigured = useMemo(() => {
+  const openClawConfigured = useMemo(() => {
     if (!userInfo?.id) return false;
-    const s = getClawSettings(userInfo.id);
-    const o = String(s.openclawUrl ?? "").trim();
-    const z = String(s.zeroclawUrl ?? "").trim();
-    return (o.length > 0 && isValidEmbedUrl(o)) || (z.length > 0 && isValidEmbedUrl(z));
+    const o = String(getClawSettings(userInfo.id).openclawUrl ?? "").trim();
+    return o.length > 0 && isValidEmbedUrl(o);
+  }, [userInfo?.id, clawSettingsVersion]);
+
+  const zeroClawConfigured = useMemo(() => {
+    if (!userInfo?.id) return false;
+    const z = String(getClawSettings(userInfo.id).zeroclawUrl ?? "").trim();
+    return z.length > 0 && isValidEmbedUrl(z);
   }, [userInfo?.id, clawSettingsVersion]);
 
   const drawerTitles: Record<ConfigKey, string> = {
     xiaomi: "小米账号",
     dida: "滴答清单",
-    claw: "Claw 嵌入",
+    openclaw: "OpenClaw 嵌入",
+    zeroclaw: "ZeroClaw 嵌入",
   };
 
   const renderXiaomiDetail = () => (
@@ -291,12 +313,12 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     </Spin>
   );
 
-  const renderClawDetail = () => (
+  const renderOpenClawDetail = () => (
     <>
       <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        填写 OpenClaw / ZeroClaw 的 Web 地址后，侧边栏会出现「Claw」菜单；仅填写其中一项时只显示对应子菜单，两项都填写则同时显示。地址保存在本机浏览器。
+        填写 OpenClaw 的 Web 地址后，侧边栏会出现「OpenClaw」入口。地址保存在本机浏览器；ZeroClaw 在另一项中单独配置。
       </Paragraph>
-      <Form form={clawForm} layout="vertical">
+      <Form form={openClawForm} layout="vertical">
         <Form.Item
           name="openclawUrl"
           label="OpenClaw 页面地址"
@@ -312,6 +334,21 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
         >
           <Input allowClear placeholder="例如 https://openclaw.example.com" />
         </Form.Item>
+        <Form.Item>
+          <Button type="primary" onClick={() => void handleSaveOpenClaw()}>
+            保存
+          </Button>
+        </Form.Item>
+      </Form>
+    </>
+  );
+
+  const renderZeroClawDetail = () => (
+    <>
+      <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+        填写 ZeroClaw 的 Web 地址后，侧边栏会出现「ZeroClaw」入口。地址保存在本机浏览器；OpenClaw 在另一项中单独配置。
+      </Paragraph>
+      <Form form={zeroClawForm} layout="vertical">
         <Form.Item
           name="zeroclawUrl"
           label="ZeroClaw 页面地址"
@@ -328,7 +365,7 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
           <Input allowClear placeholder="例如 https://zeroclaw.example.com" />
         </Form.Item>
         <Form.Item>
-          <Button type="primary" onClick={() => void handleSaveClaw()}>
+          <Button type="primary" onClick={() => void handleSaveZeroClaw()}>
             保存
           </Button>
         </Form.Item>
@@ -361,11 +398,19 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
       loading: didaLoading,
     },
     {
-      key: "claw",
-      title: "Claw 嵌入",
-      blurb: "OpenClaw / ZeroClaw 页面嵌入侧边栏",
-      icon: <ThunderboltOutlined />,
-      bound: clawConfigured,
+      key: "openclaw",
+      title: "OpenClaw",
+      blurb: "OpenClaw 页面嵌入侧边栏，与 ZeroClaw 分开配置",
+      icon: <RocketOutlined />,
+      bound: openClawConfigured,
+      loading: false,
+    },
+    {
+      key: "zeroclaw",
+      title: "ZeroClaw",
+      blurb: "ZeroClaw 页面嵌入侧边栏，与 OpenClaw 分开配置",
+      icon: <CloudOutlined />,
+      bound: zeroClawConfigured,
       loading: false,
     },
   ];
@@ -427,7 +472,8 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
       >
         {activeConfig === "xiaomi" && renderXiaomiDetail()}
         {activeConfig === "dida" && renderDidaDetail()}
-        {activeConfig === "claw" && renderClawDetail()}
+        {activeConfig === "openclaw" && renderOpenClawDetail()}
+        {activeConfig === "zeroclaw" && renderZeroClawDetail()}
       </Drawer>
     </>
   );
