@@ -25,8 +25,8 @@ import {
   resend2FACode,
   getCaptchaUrl,
   manualBindCredentials,
-} from "../api/xiaomi";
-import "./style/xiaomi-binding.sass";
+} from "../../../api/xiaomi";
+import "../styles/xiaomi-binding.sass";
 
 const { Title, Text, Paragraph } = Typography;
 

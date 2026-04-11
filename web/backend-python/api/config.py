@@ -1,8 +1,3 @@
-"""
-配置管理 API
-提供系统配置、AI模型、Agent、设备等配置的管理接口
-"""
-
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status

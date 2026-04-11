@@ -4,7 +4,7 @@
 -- =====================================================
 
 -- 使用数据库
-USE smart_home;
+USE moss_ai;
 
 -- 清空现有测试数据（可选，谨慎使用）
 -- TRUNCATE TABLE device_operations;

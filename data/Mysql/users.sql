@@ -1,3 +1,4 @@
+use moss_ai;
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

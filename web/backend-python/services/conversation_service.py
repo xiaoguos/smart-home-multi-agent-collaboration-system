@@ -1,8 +1,3 @@
-"""
-对话列表管理服务
-负责管理用户的对话列表（会话列表）
-"""
-
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime

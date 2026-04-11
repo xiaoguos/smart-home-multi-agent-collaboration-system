@@ -1,8 +1,3 @@
-"""
-用户认证 API
-提供用户注册、登录、登出等功能
-"""
-
 import logging
 import hashlib
 import time

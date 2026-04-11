@@ -19,8 +19,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   handleDidaOAuthCallback,
   getDidaOAuthUrl,
-} from "../api/dida";
-import "./style/xiaomi-binding.sass"; // 复用小米绑定的样式
+} from "../../../api/dida";
+import "../styles/xiaomi-binding.sass"; // 复用小米绑定的样式
 
 const { Title, Text, Paragraph } = Typography;
 

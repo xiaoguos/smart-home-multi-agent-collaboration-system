@@ -1,8 +1,3 @@
-"""
-MCP 设备服务
-封装 MCP 设备查询服务的调用，供后端 API 使用
-"""
-
 import asyncio
 import json
 import logging

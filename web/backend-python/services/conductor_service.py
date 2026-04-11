@@ -1,8 +1,3 @@
-"""
-Conductor Agent 服务
-负责与 Conductor Agent 通信
-"""
-
 import logging
 import httpx
 import json
@@ -10,7 +5,7 @@ from typing import Dict, Any
 from uuid import uuid4
 
 from models.chat import A2ARequest, A2AMessage, A2AMessagePart
-from config import settings
+import env
 from services.chat_history_service import chat_history_service
 
 logger = logging.getLogger(__name__)
@@ -20,8 +15,8 @@ class ConductorService:
     """Conductor Agent 通信服务"""
     
     def __init__(self):
-        self.base_url = settings.CONDUCTOR_AGENT_URL
-        self.timeout = settings.CONDUCTOR_TIMEOUT
+        self.base_url = env.CONDUCTOR_AGENT_URL
+        self.timeout = env.CONDUCTOR_TIMEOUT
         self._request_id_counter = 1
     
     def _generate_message_id(self) -> str:

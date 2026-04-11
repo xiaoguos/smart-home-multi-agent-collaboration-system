@@ -1,8 +1,3 @@
-"""
-滴答清单 MCP 服务
-封装滴答清单MCP服务的调用，供后端 API 和 Agent 使用
-"""
-
 import asyncio
 import json
 import logging

@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS smart_home;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai;
+USE moss_ai;
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT NOT NULL COMMENT '主键ID',

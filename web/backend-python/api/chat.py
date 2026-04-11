@@ -1,7 +1,3 @@
-"""
-聊天 API 路由
-"""
-
 import logging
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, status

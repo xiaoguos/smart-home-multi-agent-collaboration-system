@@ -1,8 +1,3 @@
-"""
-对话记录服务
-负责存储和查询用户与管家agent的对话记录
-"""
-
 import logging
 import json
 from typing import Optional, Dict, Any, List

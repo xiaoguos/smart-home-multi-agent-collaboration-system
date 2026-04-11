@@ -4,8 +4,8 @@
 -- 用途: 存储用户与管家agent的对话记录
 -- ============================================
 
-CREATE DATABASE IF NOT EXISTS smart_home CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE moss_ai;
 
 -- ============================================
 -- 对话记录表

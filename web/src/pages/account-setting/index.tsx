@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, message, Space, Typography, Tag, Spin, Modal } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, LinkOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getUserInfo } from '../api/auth';
-import { checkXiaomiBindingStatus, unbindXiaomiAccount, type BindingStatus } from '../api/xiaomi';
-import { checkDidaBindingStatus, unbindDidaAccount, type DidaBindingStatusResponse } from '../api/dida';
-import Header from '../components/Header';
-import './style/account-setting.sass';
+import { getUserInfo } from '../../api/auth';
+import { checkXiaomiBindingStatus, unbindXiaomiAccount, type BindingStatus } from '../../api/xiaomi';
+import { checkDidaBindingStatus, unbindDidaAccount, type DidaBindingStatusResponse } from '../../api/dida';
+import Header from '../../components/Header';
+import './account-setting.sass';
 
 const { Title, Text } = Typography;
 

@@ -5,8 +5,8 @@
 -- ============================================
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS smart_home;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai;
+USE moss_ai;
 
 -- ============================================
 -- 创建 AI 模型配置表

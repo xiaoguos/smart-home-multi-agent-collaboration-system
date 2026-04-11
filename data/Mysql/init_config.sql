@@ -5,8 +5,8 @@
 -- ============================================
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS smart_home CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE moss_ai;
 
 -- ============================================
 -- 1. 系统配置表

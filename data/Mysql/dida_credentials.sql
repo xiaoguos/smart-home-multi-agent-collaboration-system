@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS smart_home;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai;
+USE moss_ai;
 
 -- 滴答清单账号凭证表（MySQL版本）
 CREATE TABLE IF NOT EXISTS dida_credentials (

@@ -1,3 +1,4 @@
+USE moss_ai;
 -- 小米账号凭证表
 CREATE TABLE IF NOT EXISTS xiaomi_credentials (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

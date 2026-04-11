@@ -1,7 +1,3 @@
-"""
-设备操作记录服务
-负责保存和管理设备操作记录
-"""
 import logging
 import time
 import random

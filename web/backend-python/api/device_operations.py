@@ -1,6 +1,3 @@
-"""
-设备操作记录 API
-"""
 import logging
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Body

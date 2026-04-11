@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS smart_home;
-USE smart_home;
+CREATE DATABASE IF NOT EXISTS moss_ai;
+USE moss_ai;
 -- 小米账号凭证表
 CREATE TABLE IF NOT EXISTS xiaomi_credentials (
     id BIGINT NOT NULL COMMENT '主键ID',

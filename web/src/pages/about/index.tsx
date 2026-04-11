@@ -29,7 +29,7 @@ import {
   SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import "./style/about.sass";
+import "./about.sass";
 
 const { Title, Paragraph, Text, Link } = Typography;
 

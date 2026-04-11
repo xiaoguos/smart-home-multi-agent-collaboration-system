@@ -1,13 +1,20 @@
 import { createBrowserRouter, redirect } from "react-router-dom";
 import { RootLayout } from "@/layout";
-import Setting from "@/pages/Setting";
-import Chat from "@/pages/Chat";
-import About from "@/pages/About";
+import {
+  ConfigLayout,
+  ModelSettings,
+  AgentConnections,
+  AgentPrompts,
+  LocalDeviceSettings,
+  MihomeDeviceSettings,
+} from "@/pages/settings";
+import Chat from "@/pages/chat";
+import About from "@/pages/about";
 import Welcome from "@/pages/Welcome";
-import WechatCallback from "@/pages/WechatCallback";
-import XiaomiBinding from "@/pages/XiaomiBinding";
-import DidaBinding from "@/pages/DidaBinding";
-import AccountSetting from "@/pages/AccountSetting";
+import WechatCallback from "@/pages/auth/wechat-callback";
+import XiaomiBinding from "@/pages/bindings/xiaomi";
+import DidaBinding from "@/pages/bindings/dida";
+import AccountSetting from "@/pages/account-setting";
 
 export const router = createBrowserRouter([
   {
@@ -32,7 +39,61 @@ export const router = createBrowserRouter([
       },
       {
         path: "setting",
-        element: <Setting />,
+        loader: () => redirect("/models/llm"),
+      },
+      {
+        path: "setting/*",
+        loader: () => redirect("/models/llm"),
+      },
+      {
+        path: "models",
+        element: <ConfigLayout />,
+        children: [
+          {
+            index: true,
+            loader: () => redirect("/models/llm"),
+          },
+          {
+            path: "llm",
+            element: <ModelSettings />,
+          },
+        ],
+      },
+      {
+        path: "agents",
+        element: <ConfigLayout />,
+        children: [
+          {
+            index: true,
+            loader: () => redirect("/agents/connections"),
+          },
+          {
+            path: "connections",
+            element: <AgentConnections />,
+          },
+          {
+            path: "prompts",
+            element: <AgentPrompts />,
+          },
+        ],
+      },
+      {
+        path: "devices",
+        element: <ConfigLayout />,
+        children: [
+          {
+            index: true,
+            loader: () => redirect("/devices/local"),
+          },
+          {
+            path: "local",
+            element: <LocalDeviceSettings />,
+          },
+          {
+            path: "mihome",
+            element: <MihomeDeviceSettings />,
+          },
+        ],
       },
     ],
   },

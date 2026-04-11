@@ -14,9 +14,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import "./style/chat.sass";
-import { sendChatMessage } from "../api/chat";
-import { checkBindingStatus } from "../api/xiaomi";
+import "./chat.sass";
+import { sendChatMessage } from "../../api/chat";
+import { checkBindingStatus } from "../../api/xiaomi";
 import {
   getConversationList,
   getConversationHistory,
@@ -24,7 +24,7 @@ import {
   deleteConversation,
   Conversation,
   ChatMessage,
-} from "../api/conversation";
+} from "../../api/conversation";
 
 const { Text } = Typography;
 
