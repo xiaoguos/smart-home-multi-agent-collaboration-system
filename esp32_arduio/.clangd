@@ -1,0 +1,6 @@
+# 使用工程 build/compile_commands.json；构建后请执行:
+#   cmake --build build --target compile_commands_clangd
+# 或: python3 tools/patch_compile_commands.py build/compile_commands.json
+CompileFlags:
+  # 也可为 build；工程根目录有指向 build/ 的 compile_commands.json 软链接
+  CompilationDatabase: .

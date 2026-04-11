@@ -1,0 +1,8 @@
+# Match: idf.py set-target esp32s3
+CONFIG_IDF_TARGET="esp32s3"
+
+# Optional: enable on modules with Octal PSRAM (e.g. N8R8) for larger buffers
+# CONFIG_SPIRAM=y
+# CONFIG_SPIRAM_MODE_OCT=y
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

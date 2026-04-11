@@ -1,0 +1,74 @@
+menu "Audio / UART binary protocol"
+
+    config AUDIO_UART_BAUD
+        int "UART baud rate (host link)"
+        default 921600
+        help
+            Must match host (Python MCP / serial tools). 921600 is default per protocol.
+
+    config AUDIO_I2S_MIC_PORT
+        int "I2S peripheral index for microphone (RX)"
+        range 0 1
+        default 0
+        help
+            ESP32-S3: 0 = I2S0, 1 = I2S1. Typical: mic on I2S0.
+
+    config AUDIO_I2S_SPK_PORT
+        int "I2S peripheral index for speaker (TX)"
+        range 0 1
+        default 1
+        help
+            ESP32-S3: use I2S1 for playback when mic uses I2S0 (duplex, separate buses).
+
+    config AUDIO_I2S_MIC_BCLK_GPIO
+        int "Mic I2S BCLK GPIO"
+        range -1 48
+        default 4
+        help
+            ESP32-S3-DevKitC-1: wire external I2S mic; defaults are example pins only.
+
+    config AUDIO_I2S_MIC_WS_GPIO
+        int "Mic I2S WS/LRCK GPIO"
+        range -1 48
+        default 5
+
+    config AUDIO_I2S_MIC_DIN_GPIO
+        int "Mic I2S DIN (data from mic) GPIO"
+        range -1 48
+        default 6
+
+    config AUDIO_I2S_SPK_BCLK_GPIO
+        int "Speaker I2S BCLK GPIO"
+        range -1 48
+        default 7
+
+    config AUDIO_I2S_SPK_WS_GPIO
+        int "Speaker I2S WS/LRCK GPIO"
+        range -1 48
+        default 8
+
+    config AUDIO_I2S_SPK_DOUT_GPIO
+        int "Speaker I2S DOUT (data to amp) GPIO"
+        range -1 48
+        default 9
+
+endmenu
+
+menu "MCP over HTTP / WiFi"
+
+    config MCP_WIFI_SSID
+        string "WiFi SSID (empty = disable MCP HTTP)"
+        default ""
+        help
+            Station SSID. Leave empty to skip WiFi and MCP HTTP (UART protocol still works).
+
+    config MCP_WIFI_PASSWORD
+        string "WiFi password"
+        default ""
+
+    config MCP_HTTP_PORT
+        int "HTTP port for MCP JSON-RPC and mic stream"
+        default 8080
+        range 1 65535
+
+endmenu
