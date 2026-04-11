@@ -29,7 +29,7 @@ const AccountSetting: React.FC = () => {
       label: (
         <span>
           <LinkOutlined />
-          绑定配置
+          配置清单
         </span>
       ),
       children: <BindingSection userInfo={userInfo} />,

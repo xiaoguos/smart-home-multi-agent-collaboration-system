@@ -1,33 +1,58 @@
-import React, { useState, useEffect } from "react";
-import { Card, Button, message, Space, Typography, Tag, Spin, Modal } from "antd";
+import React, { useState, useEffect, useMemo } from "react";
+import { Card, Button, message, Space, Typography, Tag, Spin, Modal, Form, Input, Drawer, Row, Col } from "antd";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   LinkOutlined,
   ExclamationCircleOutlined,
+  HomeOutlined,
+  CheckSquareOutlined,
+  ThunderboltOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { checkXiaomiBindingStatus, unbindXiaomiAccount, type BindingStatus } from "../../api/xiaomi";
 import { checkDidaBindingStatus, unbindDidaAccount, type DidaBindingStatusResponse } from "../../api/dida";
 import type { UserInfo } from "../../api/auth";
+import { getClawSettings, setClawSettings, isValidEmbedUrl } from "../../utils/clawSettings";
 
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 export interface BindingSectionProps {
   userInfo: UserInfo | null;
 }
 
+type ConfigKey = "xiaomi" | "dida" | "claw";
+
 const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
   const navigate = useNavigate();
+  const [clawForm] = Form.useForm();
   const [xiaomiLoading, setXiaomiLoading] = useState(false);
   const [didaLoading, setDidaLoading] = useState(false);
   const [bindingStatus, setBindingStatus] = useState<BindingStatus | null>(null);
   const [didaBindingStatus, setDidaBindingStatus] = useState<DidaBindingStatusResponse | null>(null);
+  const [activeConfig, setActiveConfig] = useState<ConfigKey | null>(null);
+  const [clawSettingsVersion, setClawSettingsVersion] = useState(0);
 
   useEffect(() => {
     void loadBindingStatus();
     void loadDidaBindingStatus();
   }, [userInfo?.id]);
+
+  useEffect(() => {
+    const onClawChanged = () => setClawSettingsVersion((v) => v + 1);
+    window.addEventListener("clawSettingsChanged", onClawChanged);
+    return () => window.removeEventListener("clawSettingsChanged", onClawChanged);
+  }, []);
+
+  useEffect(() => {
+    if (!userInfo?.id) return;
+    const s = getClawSettings(userInfo.id);
+    clawForm.setFieldsValue({
+      openclawUrl: s.openclawUrl,
+      zeroclawUrl: s.zeroclawUrl,
+    });
+  }, [userInfo?.id, clawForm]);
 
   const loadBindingStatus = async () => {
     if (!userInfo) return;
@@ -84,6 +109,23 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
 
   const handleBindDida = () => navigate("/dida-binding");
 
+  const handleSaveClaw = async () => {
+    if (!userInfo) return;
+    try {
+      const v = await clawForm.validateFields();
+      const openclawUrl = String(v.openclawUrl ?? "").trim();
+      const zeroclawUrl = String(v.zeroclawUrl ?? "").trim();
+      if (!isValidEmbedUrl(openclawUrl) || !isValidEmbedUrl(zeroclawUrl)) {
+        message.error("地址需为 http:// 或 https:// 开头的合法 URL");
+        return;
+      }
+      setClawSettings(userInfo.id, { openclawUrl, zeroclawUrl });
+      message.success("Claw 嵌入地址已保存");
+    } catch {
+      /* 表单校验未通过 */
+    }
+  };
+
   const handleUnbindDida = () => {
     if (!userInfo) return;
     Modal.confirm({
@@ -107,143 +149,286 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     });
   };
 
-  return (
-    <>
-      <Card
-        title="小米账号绑定"
-        className="binding-card"
-        extra={
-          !bindingStatus?.is_bound && (
-            <Button type="primary" icon={<LinkOutlined />} onClick={handleBindXiaomi}>
-              绑定小米账号
-            </Button>
-          )
-        }
-      >
-        <Spin spinning={xiaomiLoading}>
-          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+  const clawConfigured = useMemo(() => {
+    if (!userInfo?.id) return false;
+    const s = getClawSettings(userInfo.id);
+    const o = String(s.openclawUrl ?? "").trim();
+    const z = String(s.zeroclawUrl ?? "").trim();
+    return (o.length > 0 && isValidEmbedUrl(o)) || (z.length > 0 && isValidEmbedUrl(z));
+  }, [userInfo?.id, clawSettingsVersion]);
+
+  const drawerTitles: Record<ConfigKey, string> = {
+    xiaomi: "小米账号",
+    dida: "滴答清单",
+    claw: "Claw 嵌入",
+  };
+
+  const renderXiaomiDetail = () => (
+    <Spin spinning={xiaomiLoading}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        <div className="status-row">
+          <Text strong>绑定状态：</Text>
+          {bindingStatus?.is_bound ? (
+            <Tag icon={<CheckCircleOutlined />} color="success">
+              已绑定
+            </Tag>
+          ) : (
+            <Tag icon={<CloseCircleOutlined />} color="default">
+              未绑定
+            </Tag>
+          )}
+        </div>
+
+        {bindingStatus?.is_bound && (
+          <>
             <div className="status-row">
-              <Text strong>绑定状态：</Text>
-              {bindingStatus?.is_bound ? (
-                <Tag icon={<CheckCircleOutlined />} color="success">
-                  已绑定
-                </Tag>
-              ) : (
-                <Tag icon={<CloseCircleOutlined />} color="default">
-                  未绑定
-                </Tag>
-              )}
+              <Text strong>小米账号：</Text>
+              <Text>{bindingStatus.username}</Text>
             </div>
-
-            {bindingStatus?.is_bound && (
-              <>
-                <div className="status-row">
-                  <Text strong>小米账号：</Text>
-                  <Text>{bindingStatus.username}</Text>
-                </div>
-                {bindingStatus.bound_at && (
-                  <div className="status-row">
-                    <Text strong>绑定时间：</Text>
-                    <Text type="secondary">{new Date(bindingStatus.bound_at).toLocaleString("zh-CN")}</Text>
-                  </div>
-                )}
-                <div className="rebind-section">
-                  <Space>
-                    <Button type="default" onClick={handleBindXiaomi}>
-                      重新绑定
-                    </Button>
-                    <Button danger onClick={handleUnbindXiaomi}>
-                      解绑账号
-                    </Button>
-                  </Space>
-                  <Text type="secondary" style={{ marginTop: 8, display: "block" }}>
-                    解绑后需重新授权才能使用相关功能
-                  </Text>
-                </div>
-              </>
-            )}
-
-            {!bindingStatus?.is_bound && (
-              <div className="binding-hint">
-                <Text type="secondary">绑定小米账号后，您可以通过 Moss AI 控制小米智能家居设备</Text>
+            {bindingStatus.bound_at && (
+              <div className="status-row">
+                <Text strong>绑定时间：</Text>
+                <Text type="secondary">{new Date(bindingStatus.bound_at).toLocaleString("zh-CN")}</Text>
               </div>
             )}
-          </Space>
-        </Spin>
-      </Card>
-
-      <Card
-        title="滴答清单账号绑定"
-        className="binding-card"
-        extra={
-          !didaBindingStatus?.is_bound && (
-            <Button type="primary" icon={<LinkOutlined />} onClick={handleBindDida}>
-              绑定滴答清单
-            </Button>
-          )
-        }
-      >
-        <Spin spinning={didaLoading}>
-          <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <div className="status-row">
-              <Text strong>绑定状态：</Text>
-              {didaBindingStatus?.is_bound ? (
-                <Tag icon={<CheckCircleOutlined />} color="success">
-                  已绑定
-                </Tag>
-              ) : (
-                <Tag icon={<CloseCircleOutlined />} color="default">
-                  未绑定
-                </Tag>
-              )}
+            <div className="rebind-section">
+              <Space wrap>
+                <Button type="default" onClick={handleBindXiaomi}>
+                  重新绑定
+                </Button>
+                <Button danger onClick={handleUnbindXiaomi}>
+                  解绑账号
+                </Button>
+              </Space>
+              <Text type="secondary" style={{ marginTop: 8, display: "block" }}>
+                解绑后需重新授权才能使用相关功能
+              </Text>
             </div>
+          </>
+        )}
 
-            {didaBindingStatus?.is_bound && (
-              <>
-                <div className="status-row">
-                  <Text strong>滴答清单账号：</Text>
-                  <Text>{didaBindingStatus.username}</Text>
-                </div>
-                {didaBindingStatus.bound_at && (
-                  <div className="status-row">
-                    <Text strong>绑定时间：</Text>
-                    <Text type="secondary">{new Date(didaBindingStatus.bound_at).toLocaleString("zh-CN")}</Text>
-                  </div>
-                )}
-                {didaBindingStatus.token_expires_at && (
-                  <div className="status-row">
-                    <Text strong>令牌过期时间：</Text>
-                    <Text type="secondary">
-                      {new Date(didaBindingStatus.token_expires_at).toLocaleString("zh-CN")}
-                    </Text>
-                  </div>
-                )}
-                <div className="rebind-section">
-                  <Space>
-                    <Button type="default" onClick={handleBindDida}>
-                      重新绑定
-                    </Button>
-                    <Button danger onClick={handleUnbindDida}>
-                      解绑账号
-                    </Button>
-                  </Space>
-                  <Text type="secondary" style={{ marginTop: 8, display: "block" }}>
-                    解绑后需重新授权才能使用相关功能
-                  </Text>
-                </div>
-              </>
+        {!bindingStatus?.is_bound && (
+          <div className="binding-hint">
+            <Text type="secondary">绑定小米账号后，您可以通过 Moss AI 控制小米智能家居设备</Text>
+          </div>
+        )}
+
+        {!bindingStatus?.is_bound && (
+          <Button type="primary" icon={<LinkOutlined />} block onClick={handleBindXiaomi}>
+            绑定小米账号
+          </Button>
+        )}
+      </Space>
+    </Spin>
+  );
+
+  const renderDidaDetail = () => (
+    <Spin spinning={didaLoading}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        <div className="status-row">
+          <Text strong>绑定状态：</Text>
+          {didaBindingStatus?.is_bound ? (
+            <Tag icon={<CheckCircleOutlined />} color="success">
+              已绑定
+            </Tag>
+          ) : (
+            <Tag icon={<CloseCircleOutlined />} color="default">
+              未绑定
+            </Tag>
+          )}
+        </div>
+
+        {didaBindingStatus?.is_bound && (
+          <>
+            <div className="status-row">
+              <Text strong>滴答清单账号：</Text>
+              <Text>{didaBindingStatus.username}</Text>
+            </div>
+            {didaBindingStatus.bound_at && (
+              <div className="status-row">
+                <Text strong>绑定时间：</Text>
+                <Text type="secondary">{new Date(didaBindingStatus.bound_at).toLocaleString("zh-CN")}</Text>
+              </div>
             )}
-
-            {!didaBindingStatus?.is_bound && (
-              <div className="binding-hint">
+            {didaBindingStatus.token_expires_at && (
+              <div className="status-row">
+                <Text strong>令牌过期时间：</Text>
                 <Text type="secondary">
-                  绑定滴答清单账号后，您可以通过 Moss AI 助手管理您的待办事项、创建任务等
+                  {new Date(didaBindingStatus.token_expires_at).toLocaleString("zh-CN")}
                 </Text>
               </div>
             )}
-          </Space>
-        </Spin>
+            <div className="rebind-section">
+              <Space wrap>
+                <Button type="default" onClick={handleBindDida}>
+                  重新绑定
+                </Button>
+                <Button danger onClick={handleUnbindDida}>
+                  解绑账号
+                </Button>
+              </Space>
+              <Text type="secondary" style={{ marginTop: 8, display: "block" }}>
+                解绑后需重新授权才能使用相关功能
+              </Text>
+            </div>
+          </>
+        )}
+
+        {!didaBindingStatus?.is_bound && (
+          <div className="binding-hint">
+            <Text type="secondary">
+              绑定滴答清单账号后，您可以通过 Moss AI 助手管理您的待办事项、创建任务等
+            </Text>
+          </div>
+        )}
+
+        {!didaBindingStatus?.is_bound && (
+          <Button type="primary" icon={<LinkOutlined />} block onClick={handleBindDida}>
+            绑定滴答清单
+          </Button>
+        )}
+      </Space>
+    </Spin>
+  );
+
+  const renderClawDetail = () => (
+    <>
+      <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+        填写 OpenClaw / ZeroClaw 的 Web 地址后，侧边栏会出现「Claw」菜单；仅填写其中一项时只显示对应子菜单，两项都填写则同时显示。地址保存在本机浏览器。
+      </Paragraph>
+      <Form form={clawForm} layout="vertical">
+        <Form.Item
+          name="openclawUrl"
+          label="OpenClaw 页面地址"
+          rules={[
+            {
+              validator: async (_, value: string) => {
+                const t = String(value ?? "").trim();
+                if (!t) return;
+                if (!isValidEmbedUrl(t)) throw new Error("请输入以 http:// 或 https:// 开头的地址");
+              },
+            },
+          ]}
+        >
+          <Input allowClear placeholder="例如 https://openclaw.example.com" />
+        </Form.Item>
+        <Form.Item
+          name="zeroclawUrl"
+          label="ZeroClaw 页面地址"
+          rules={[
+            {
+              validator: async (_, value: string) => {
+                const t = String(value ?? "").trim();
+                if (!t) return;
+                if (!isValidEmbedUrl(t)) throw new Error("请输入以 http:// 或 https:// 开头的地址");
+              },
+            },
+          ]}
+        >
+          <Input allowClear placeholder="例如 https://zeroclaw.example.com" />
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" onClick={() => void handleSaveClaw()}>
+            保存
+          </Button>
+        </Form.Item>
+      </Form>
+    </>
+  );
+
+  const catalogItems: {
+    key: ConfigKey;
+    title: string;
+    blurb: string;
+    icon: React.ReactNode;
+    bound: boolean;
+    loading: boolean;
+  }[] = [
+    {
+      key: "xiaomi",
+      title: "小米账号",
+      blurb: "智能家居与设备联动，语音与场景控制",
+      icon: <HomeOutlined />,
+      bound: Boolean(bindingStatus?.is_bound),
+      loading: xiaomiLoading,
+    },
+    {
+      key: "dida",
+      title: "滴答清单",
+      blurb: "待办与任务同步，像清单插件一样接入助手",
+      icon: <CheckSquareOutlined />,
+      bound: Boolean(didaBindingStatus?.is_bound),
+      loading: didaLoading,
+    },
+    {
+      key: "claw",
+      title: "Claw 嵌入",
+      blurb: "OpenClaw / ZeroClaw 页面嵌入侧边栏",
+      icon: <ThunderboltOutlined />,
+      bound: clawConfigured,
+      loading: false,
+    },
+  ];
+
+  return (
+    <>
+      <Card className="config-catalog-card" bordered={false}>
+        <Paragraph type="secondary" className="config-catalog-intro">
+          以下为可启用的集成项，点击缩略块查看授权、账号与地址等详细设置（类似插件管理）。
+        </Paragraph>
+        <Row gutter={[16, 16]}>
+          {catalogItems.map((item) => (
+            <Col xs={24} sm={12} lg={8} key={item.key}>
+              <button
+                type="button"
+                className="config-tile"
+                onClick={() => setActiveConfig(item.key)}
+                aria-label={`打开 ${item.title} 配置`}
+              >
+                <Spin spinning={item.loading}>
+                  <div className="config-tile-inner">
+                    <div className="config-tile-icon">{item.icon}</div>
+                    <div className="config-tile-body">
+                      <div className="config-tile-title-row">
+                        <Text strong className="config-tile-title">
+                          {item.title}
+                        </Text>
+                        {item.bound ? (
+                          <Tag icon={<CheckCircleOutlined />} color="success" className="config-tile-tag">
+                            已启用
+                          </Tag>
+                        ) : (
+                          <Tag color="default" className="config-tile-tag">
+                            未配置
+                          </Tag>
+                        )}
+                      </div>
+                      <Text type="secondary" className="config-tile-desc" ellipsis={{ rows: 2 }}>
+                        {item.blurb}
+                      </Text>
+                    </div>
+                    <RightOutlined className="config-tile-chevron" aria-hidden />
+                  </div>
+                </Spin>
+              </button>
+            </Col>
+          ))}
+        </Row>
       </Card>
+
+      <Drawer
+        title={activeConfig ? drawerTitles[activeConfig] : ""}
+        placement="right"
+        width={Math.min(520, typeof window !== "undefined" ? window.innerWidth - 24 : 520)}
+        open={activeConfig !== null}
+        onClose={() => setActiveConfig(null)}
+        destroyOnClose
+        className="config-detail-drawer"
+      >
+        {activeConfig === "xiaomi" && renderXiaomiDetail()}
+        {activeConfig === "dida" && renderDidaDetail()}
+        {activeConfig === "claw" && renderClawDetail()}
+      </Drawer>
     </>
   );
 };

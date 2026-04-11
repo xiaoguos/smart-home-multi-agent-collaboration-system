@@ -16,6 +16,8 @@ import WechatCallback from "@/pages/auth/wechat-callback";
 import XiaomiBinding from "@/pages/bindings/xiaomi";
 import DidaBinding from "@/pages/bindings/dida";
 import AccountSetting from "@/pages/account-setting";
+import ClawEmbed from "@/pages/claw/ClawEmbed";
+import ClawIndexRedirect from "@/pages/claw/ClawIndexRedirect";
 import NotFoundPage from "@/pages/errors/404";
 import RootShell from "@/router/RootShell";
 import { NOT_FOUND_HANDLE } from "@/router/handles";
@@ -123,6 +125,27 @@ export const router = createBrowserRouter([
                   {
                     path: "mihome",
                     element: <MihomeDeviceSettings />,
+                  },
+                  {
+                    path: "*",
+                    ...notFoundRoute,
+                  },
+                ],
+              },
+              {
+                path: "claw",
+                children: [
+                  {
+                    index: true,
+                    element: <ClawIndexRedirect />,
+                  },
+                  {
+                    path: "open",
+                    element: <ClawEmbed variant="open" />,
+                  },
+                  {
+                    path: "zero",
+                    element: <ClawEmbed variant="zero" />,
                   },
                   {
                     path: "*",

@@ -25,5 +25,7 @@ export function isValidAppPath(pathname: string): boolean {
   if (p === "/agents" || /^\/agents\/(connections|prompts)$/.test(p)) return true;
   if (p === "/devices" || /^\/devices\/(local|mihome)$/.test(p)) return true;
 
+  if (p === "/claw" || /^\/claw\/(open|zero)$/.test(p)) return true;
+
   return false;
 }
