@@ -122,7 +122,7 @@ def manage_dida_task(
         access_token = credentials["access_token"]
         
         # 导入MCP服务
-        from services.dida_mcp_service import get_dida_mcp_service
+        from mcp_clients.dida_mcp_service import get_dida_mcp_service
         import asyncio
         
         mcp_service = get_dida_mcp_service()
@@ -289,7 +289,7 @@ def manage_dida_project(
         access_token = credentials["access_token"]
         
         # 导入MCP服务
-        from services.dida_mcp_service import get_dida_mcp_service
+        from mcp_clients.dida_mcp_service import get_dida_mcp_service
         import asyncio
         
         mcp_service = get_dida_mcp_service()

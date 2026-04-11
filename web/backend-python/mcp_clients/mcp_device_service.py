@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
@@ -13,39 +12,51 @@ class MCPDeviceService:
     
     def __init__(self):
         """初始化 MCP 设备服务"""
-        # 计算 MCP 服务路径
-        # 当前文件: app/backend-python/services/mcp_device_service.py
-        # 目标路径: mcp/device_query_mcp.py
-        current_dir = Path(__file__).parent  # app/backend-python/services
-        backend_dir = current_dir.parent      # app/backend-python
-        app_dir = backend_dir.parent          # app
-        project_root = app_dir.parent         # project root
-        self.mcp_path = project_root / "mcp" / "device_query_mcp.py"
-        
-        logger.info(f"MCP 服务路径: {self.mcp_path}")
-        
-        if not self.mcp_path.exists():
-            logger.warning(f"MCP 服务文件不存在: {self.mcp_path}")
+        # 通过已运行的 MCP Gateway（SSE）访问下游 device_query 服务
+        self.gateway_url = (
+            os.environ.get("MCP_GATEWAY_SSE_URL", "http://127.0.0.1:8099/sse").strip()
+            or "http://127.0.0.1:8099/sse"
+        )
+        self.gateway_tool_name = (
+            os.environ.get("MCP_GATEWAY_PROXY_TOOL", "call_gateway_service_tool").strip()
+            or "call_gateway_service_tool"
+        )
+        self.target_service_name = (
+            os.environ.get("MCP_DEVICE_SERVICE_NAME", "device_query").strip()
+            or "device_query"
+        )
+        logger.info(
+            "MCP 网关配置: url=%s, proxy_tool=%s, target_service=%s",
+            self.gateway_url,
+            self.gateway_tool_name,
+            self.target_service_name,
+        )
         
         # MCP 依赖检查
         self.mcp_available = self._check_mcp_available()
     
     def _check_mcp_available(self) -> bool:
         """检查 MCP 是否可用"""
-        # 1. 检查文件是否存在
-        if not self.mcp_path.exists():
-            logger.error(f"❌ MCP 服务文件不存在: {self.mcp_path}")
-            return False
-        
-        # 2. 检查依赖是否已安装
+        # 检查网关客户端依赖
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
-            logger.info("✅ MCP 依赖检查通过")
+            from mcp import ClientSession
+            from mcp.client.sse import sse_client
+
+            _ = (ClientSession, sse_client)
+            logger.info("✅ MCP 网关客户端依赖检查通过")
             return True
         except ImportError as e:
             logger.error(f"❌ MCP 依赖未安装: {e}")
             return False
+
+    @staticmethod
+    def _extract_text_from_tool_result(result: Any) -> str:
+        """从 MCP tool result 中提取文本内容。"""
+        if hasattr(result, "content") and result.content:
+            part = result.content[0]
+            if hasattr(part, "text") and isinstance(part.text, str):
+                return part.text
+        return str(result)
         
     async def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -60,51 +71,90 @@ class MCPDeviceService:
         """
         # 预检查：MCP 是否可用
         if not self.mcp_available:
-            if not self.mcp_path.exists():
-                logger.error(f"开发错误：MCP 服务文件不存在: {self.mcp_path}")
-            else:
-                logger.error("开发错误：MCP 依赖未安装（pip install fastmcp）")
+            logger.error("开发错误：请安装官方 MCP Python SDK（pip install mcp）")
             
             return {
                 "success": False,
-                "message": "请先检查设备查询服务是否启动。"
+                "message": "MCP 客户端依赖缺失，请安装 mcp。"
             }
         
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
+            from mcp import ClientSession
+            from mcp.client.sse import sse_client
             
-            logger.info(f"✅ 调用 MCP 工具: {tool_name}, 参数: {arguments}")
-            
-            # 创建 MCP 客户端
-            server_params = StdioServerParameters(
-                command="python",
-                args=[str(self.mcp_path)],
+            logger.info(
+                "✅ 通过 MCP 网关调用工具: service=%s, tool=%s, args=%s",
+                self.target_service_name,
+                tool_name,
+                arguments,
             )
             
-            async with stdio_client(server_params) as (read, write):
+            gateway_args = {
+                "service_name": self.target_service_name,
+                "tool_name": tool_name,
+                "arguments_json": json.dumps(arguments, ensure_ascii=False),
+            }
+            
+            async with sse_client(self.gateway_url) as (read, write):
                 async with ClientSession(read, write) as session:
-                    # 初始化
                     await session.initialize()
-                    
-                    # 调用工具
-                    result = await session.call_tool(tool_name, arguments=arguments)
-                    
-                    # 解析结果
-                    result_text = result.content[0].text if hasattr(result, 'content') else str(result)
-                    return json.loads(result_text)
+                    result = await session.call_tool(
+                        self.gateway_tool_name,
+                        arguments=gateway_args,
+                    )
+
+            payload_text = self._extract_text_from_tool_result(result)
+            try:
+                gateway_payload = json.loads(payload_text)
+            except json.JSONDecodeError:
+                logger.error("MCP 网关返回非 JSON: %s", payload_text)
+                return {"success": False, "message": "MCP网关返回格式异常（非JSON）"}
+
+            if not gateway_payload.get("success"):
+                return {
+                    "success": False,
+                    "message": gateway_payload.get("message", "MCP网关调用失败"),
+                }
+
+            wrapped = gateway_payload.get("result", {}) if isinstance(gateway_payload, dict) else {}
+            parsed = wrapped.get("parsed") if isinstance(wrapped, dict) else None
+
+            # 理想路径：下游工具返回 JSON 对象
+            if isinstance(parsed, dict):
+                return parsed
+
+            # 兼容路径：返回字符串 JSON
+            if isinstance(parsed, str):
+                try:
+                    parsed_obj = json.loads(parsed)
+                    if isinstance(parsed_obj, dict):
+                        return parsed_obj
+                    return {"success": True, "data": parsed_obj}
+                except json.JSONDecodeError:
+                    return {"success": True, "data": parsed}
+
+            text_fallback = wrapped.get("text") if isinstance(wrapped, dict) else None
+            if isinstance(text_fallback, str) and text_fallback.strip():
+                try:
+                    parsed_obj = json.loads(text_fallback)
+                    if isinstance(parsed_obj, dict):
+                        return parsed_obj
+                except json.JSONDecodeError:
+                    pass
+
+            return {"success": False, "message": "MCP网关返回结果缺少可解析数据"}
                     
         except ImportError as e:
             logger.error(f"开发错误：MCP 模块未安装: {e}")
             return {
                 "success": False,
-                "message": "请先检查设备查询服务是否启动。"
+                "message": "MCP 客户端依赖缺失，请安装 mcp。"
             }
         except Exception as e:
-            logger.error(f"MCP 服务调用失败: {e}", exc_info=True)
+            logger.error(f"MCP 网关调用失败: {e}", exc_info=True)
             return {
                 "success": False,
-                "message": "请先检查设备查询服务是否启动。"
+                "message": f"MCP网关调用失败: {str(e)}"
             }
     
     def _call_mcp_tool_sync(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[Dict[str, Any]]:

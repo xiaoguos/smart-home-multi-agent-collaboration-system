@@ -10,15 +10,22 @@ import sys
 import os
 from typing import Optional, List, Dict, Any
 from fastmcp import FastMCP
-import yaml
 from pathlib import Path
-import pymysql
-from pymysql.cursors import DictCursor
 
 # 导入 XiaomiCloudConnector 类
-backend_path = os.path.join(os.path.dirname(__file__), '..', 'app', 'backend-python')
-sys.path.insert(0, backend_path)
+# 兼容不同目录结构：优先 web/backend-python，回退 app/backend-python（历史路径）
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent
+backend_candidates = [
+    project_root / "web" / "backend-python",
+    project_root / "app" / "backend-python",
+]
+for candidate in backend_candidates:
+    if candidate.exists():
+        sys.path.insert(0, str(candidate))
+        break
 from api.xiaomi_auth import XiaomiCloudConnector
+from database import query, init_database
 
 # 配置日志（MCP 模式下减少日志输出）
 if "--stdio" not in sys.argv and "mcp" not in sys.argv[0].lower():
@@ -32,78 +39,31 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("Device Query Service", version="1.0.0")
 
 
-def load_config(config_path: str = "../config.yaml") -> dict:
-    """加载配置文件"""
-    try:
-        if not os.path.isabs(config_path):
-            current_dir = Path(__file__).parent
-            yaml_path = (current_dir / config_path).resolve()
-        else:
-            yaml_path = Path(config_path)
-        
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"加载配置文件失败: {e}")
-        return {}
-
-
-def get_database_connection():
-    """获取数据库连接"""
-    try:
-        config = load_config()
-        db_type = config.get('database', {}).get('type', 'starrocks')
-        db_config = config.get('database', {}).get(db_type, {})
-        
-        connection = pymysql.connect(
-            host=db_config.get('host', 'localhost'),
-            port=db_config.get('port', 9030),
-            user=db_config.get('user', 'root'),
-            password=db_config.get('password', ''),
-            database=db_config.get('database', 'smart_home'),
-            charset=db_config.get('charset', 'utf8mb4'),
-            cursorclass=DictCursor,
-            autocommit=True,
-            connect_timeout=5
-        )
-        return connection
-    except Exception as e:
-        logger.error(f"数据库连接失败: {e}")
-        return None
-
-
 def query_xiaomi_credentials(system_user_id: int) -> Optional[Dict[str, Any]]:
-    """从数据库查询小米凭证"""
-    connection = get_database_connection()
-    if not connection:
-        return None
-    
+    """从后端数据库查询小米凭证（复用 web/backend-python 的数据库配置）。"""
     try:
-        with connection.cursor() as cursor:
-            # 从 xiaomi_account 表查询
-            # 注意：StarRocks DUPLICATE KEY 表，直接取最新记录（不判断 is_active）
-            sql = """
-                SELECT service_token, ssecurity, xiaomi_user_id, server, xiaomi_username
-                FROM xiaomi_account 
-                WHERE system_user_id = %s
-                ORDER BY updated_at DESC 
-                LIMIT 1
-            """
-            logger.info(f"执行查询: system_user_id={system_user_id}")
-            cursor.execute(sql, (system_user_id,))
-            result = cursor.fetchone()
-            
-            if result:
-                logger.info(f"✅ 查询到凭证: xiaomi_username={result.get('xiaomi_username', 'N/A')}")
-            else:
-                logger.warning(f"⚠️ 未查询到凭证: system_user_id={system_user_id}")
-            
-            return result
+        # 使用 backend-python/database.py 的连接（读取 backend-python/.env）
+        init_database(strict_mode=False)
+        sql = """
+            SELECT service_token, ssecurity, xiaomi_user_id, server, xiaomi_username
+            FROM xiaomi_account
+            WHERE system_user_id = %s AND is_active = 1
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """
+        logger.info(f"执行查询: system_user_id={system_user_id}")
+        rows = query(sql, (system_user_id,))
+        result = rows[0] if rows else None
+
+        if result:
+            logger.info(f"✅ 查询到凭证: xiaomi_username={result.get('xiaomi_username', 'N/A')}")
+        else:
+            logger.warning(f"⚠️ 未查询到凭证: system_user_id={system_user_id}")
+
+        return result
     except Exception as e:
         logger.error(f"查询小米凭证失败: {e}", exc_info=True)
         return None
-    finally:
-        connection.close()
 
 
 async def _fetch_user_devices(

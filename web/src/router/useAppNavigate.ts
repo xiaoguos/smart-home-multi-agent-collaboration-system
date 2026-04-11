@@ -21,7 +21,8 @@ export function useAppNavigate() {
   return useCallback(
     (to: To | number, options?: NavigateOptions) => {
       if (typeof to === "number") {
-        navigate(to, options);
+        // 历史步进仅支持 navigate(delta)，与 NavigateOptions 无关
+        navigate(to);
         return;
       }
       const pathname = toPathname(to);

@@ -327,6 +327,11 @@ class AgentConfigLoader:
         """获取所有 Agent 的配置"""
         return self.agents_config
 
+    def get_esp32_audio_mcp_config(self) -> Dict[str, Any]:
+        """获取 ESP32 音频 MCP（stdio）插件配置，见根目录 config.yaml 中 esp32_audio_mcp。"""
+        raw = self.config.get("esp32_audio_mcp")
+        return raw if isinstance(raw, dict) else {}
+
 
 # 全局配置加载器实例
 _config_loader = None

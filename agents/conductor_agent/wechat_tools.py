@@ -57,7 +57,7 @@ def get_wechat_chat_history(
     """
     try:
         # 导入MCP服务
-        from services.wechat_mcp_service import get_wechat_mcp_service
+        from mcp_clients.wechat_mcp_service import get_wechat_mcp_service
         import asyncio
         
         mcp_service = get_wechat_mcp_service()
@@ -102,7 +102,7 @@ def send_wechat_message(
     """
     try:
         # 导入MCP服务
-        from services.wechat_mcp_service import get_wechat_mcp_service
+        from mcp_clients.wechat_mcp_service import get_wechat_mcp_service
         import asyncio
         
         mcp_service = get_wechat_mcp_service()
@@ -143,7 +143,7 @@ def send_multiple_wechat_messages(
     """
     try:
         # 导入MCP服务
-        from services.wechat_mcp_service import get_wechat_mcp_service
+        from mcp_clients.wechat_mcp_service import get_wechat_mcp_service
         import asyncio
         
         mcp_service = get_wechat_mcp_service()
@@ -184,7 +184,7 @@ def send_wechat_to_multiple_friends(
     """
     try:
         # 导入MCP服务
-        from services.wechat_mcp_service import get_wechat_mcp_service
+        from mcp_clients.wechat_mcp_service import get_wechat_mcp_service
         import asyncio
         
         mcp_service = get_wechat_mcp_service()

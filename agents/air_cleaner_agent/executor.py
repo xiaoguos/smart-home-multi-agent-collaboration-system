@@ -6,6 +6,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import (
     InternalError,
     InvalidParamsError,
+    Message,
     Part,
     TaskState,
     TextPart,
@@ -30,6 +31,22 @@ class AirPurifierAgentExecutor(AgentExecutor):
     def __init__(self):
         self.agent = AirPurifierAgent()
 
+    @staticmethod
+    def _extract_skill_id_from_context(context: RequestContext) -> str | None:
+        """从 MessageSendParams 或 Message 的 metadata 读取 A2A skillId。"""
+        keys = ("skillId", "skill_id", "a2a.skillId")
+        meta = context.metadata
+        for k in keys:
+            if k in meta and meta[k]:
+                return str(meta[k])
+        msg: Message | None = context.message
+        if msg and msg.metadata:
+            m = msg.metadata
+            for k in keys:
+                if k in m and m[k]:
+                    return str(m[k])
+        return None
+
     async def execute(
         self,
         context: RequestContext,
@@ -46,8 +63,9 @@ class AirPurifierAgentExecutor(AgentExecutor):
             await event_queue.enqueue_event(task)
         updater = TaskUpdater(event_queue, task.id, task.context_id)
         try:
-            # 使用非流式invoke方法
-            result = await self.agent.invoke(query, task.context_id)
+            skill_id = self._extract_skill_id_from_context(context)
+            # 使用非流式invoke方法（传入 A2A skillId 以便模型对齐技能）
+            result = await self.agent.invoke(query, task.context_id, skill_id=skill_id)
             
             is_task_complete = result.get('is_task_complete', True)
             require_user_input = result.get('require_user_input', False)

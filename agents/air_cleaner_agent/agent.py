@@ -21,6 +21,7 @@ from tools import (
     set_purifier_alarm,
     set_purifier_child_lock
 )
+from skills_catalog import format_skills_for_llm, user_message_skill_prefix
 
 memory = MemorySaver()
 
@@ -87,9 +88,10 @@ class AirPurifierAgent:
                 temperature=ai_config['temperature'],
             )
             
-            # 加载系统提示词
+            # 加载系统提示词，并附加 A2A Skills 说明供模型对齐 skill id 与工具
             system_prompt = config_loader.get_agent_prompt('air_cleaner')
-            self.SYSTEM_PROMPT = system_prompt
+            base = system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
+            self.SYSTEM_PROMPT = base + "\n\n" + format_skills_for_llm()
             
         except Exception as e:
             logger.error(f"❌ 配置加载失败: {e}")
@@ -116,9 +118,15 @@ class AirPurifierAgent:
             prompt=self.SYSTEM_PROMPT,
         )
 
-    async def invoke(self, query, context_id) -> dict[str, Any]:
-        """非流式调用，直接返回最终结果"""
-        inputs = {'messages': [('user', query)]}
+    async def invoke(
+        self,
+        query: str,
+        context_id: str,
+        skill_id: str | None = None,
+    ) -> dict[str, Any]:
+        """非流式调用，直接返回最终结果。skill_id 来自 A2A 请求 metadata，用于强调当前技能上下文。"""
+        user_text = user_message_skill_prefix(skill_id) + query
+        inputs = {'messages': [('user', user_text)]}
         config = {'configurable': {'thread_id': context_id}}
         
         # 直接调用invoke，不使用stream

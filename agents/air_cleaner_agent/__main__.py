@@ -11,7 +11,6 @@ import uvicorn
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
-    AgentSkill,
 )
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -32,6 +31,7 @@ if str(parent_dir) not in sys.path:
 
 from executor import AirPurifierAgentExecutor
 from agent import AirPurifierAgent
+from skills_catalog import build_air_purifier_skills
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,19 +56,7 @@ def main(host, port):
             state_transition_history=False,
             streaming=False,
         )
-        skill = AgentSkill(
-            id="control_air_purifier",
-            name="Air Purifier Control",
-            description="控制桌面空气净化器（zhimi-oa1），包括电源、风扇等级、工作模式、LED亮度，查询PM2.5、湿度、滤芯寿命等",
-            tags=["air purifier", "air quality", "PM2.5", "home automation", "smart home"],
-            examples=[
-                "打开空气净化器",
-                "查询当前PM2.5",
-                "设置为睡眠模式",
-                "把风扇调到高速",
-                "关闭LED灯",
-            ],
-        )
+        skills = build_air_purifier_skills()
         agent_card = AgentCard(
             name="Air Purifier Agent",
             description="桌面空气净化器（zhimi-oa1）控制的专业助手",
@@ -77,7 +65,7 @@ def main(host, port):
             default_input_modes=AirPurifierAgent.SUPPORTED_CONTENT_TYPES,
             default_output_modes=AirPurifierAgent.SUPPORTED_CONTENT_TYPES,
             capabilities=capabilities,
-            skills=[skill],
+            skills=skills,
         )
 
         # --8<-- [start:DefaultRequestHandler]

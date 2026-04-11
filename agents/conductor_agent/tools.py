@@ -1117,7 +1117,7 @@ def list_xiaomi_devices(system_user_id: int, server: str = "cn"):
             sys.path.insert(0, backend_path)
         
         # 导入后端的 MCP 设备服务（复用已有代码）
-        from services.mcp_device_service import get_mcp_device_service
+        from mcp_clients.mcp_device_service import get_mcp_device_service
         
         # 获取 MCP 服务实例
         mcp_service = get_mcp_device_service()

@@ -35,7 +35,7 @@ class WindowsShortcutArgs(BaseModel):
 def manage_windows_app(action: str, app_name: str) -> str:
     """管理Windows应用程序"""
     try:
-        from services.windows_mcp_service import get_windows_mcp_service
+        from mcp_clients.windows_mcp_service import get_windows_mcp_service
         import asyncio
         
         mcp_service = get_windows_mcp_service()
@@ -66,7 +66,7 @@ def manage_windows_app(action: str, app_name: str) -> str:
 def execute_powershell_command(command: str) -> str:
     """执行PowerShell命令"""
     try:
-        from services.windows_mcp_service import get_windows_mcp_service
+        from mcp_clients.windows_mcp_service import get_windows_mcp_service
         import asyncio
         
         mcp_service = get_windows_mcp_service()
@@ -90,7 +90,7 @@ def execute_powershell_command(command: str) -> str:
 def execute_windows_shortcut(shortcut: str) -> str:
     """执行Windows快捷键"""
     try:
-        from services.windows_mcp_service import get_windows_mcp_service
+        from mcp_clients.windows_mcp_service import get_windows_mcp_service
         import asyncio
         
         mcp_service = get_windows_mcp_service()

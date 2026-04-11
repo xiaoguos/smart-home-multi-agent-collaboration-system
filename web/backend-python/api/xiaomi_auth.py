@@ -993,7 +993,7 @@ async def check_binding_status(system_user_id: int):
         debug_result = query(debug_sql, (system_user_id,))
         logger.info(f"🔍 该用户所有绑定记录: {debug_result}")
         
-        # 查询该用户最新的激活绑定记录
+        # 仅以「当前仍为激活」的记录为准；解绑后 is_active=0，不得回退为「任意最新一条」否则前端会一直显示已绑定
         sql = """
             SELECT xiaomi_username, created_at, is_active
             FROM xiaomi_account 
@@ -1003,30 +1003,17 @@ async def check_binding_status(system_user_id: int):
         """
         result = query(sql, (system_user_id,))
         
-        logger.info(f"📊 带 is_active=1 条件的查询结果: {result}")
-        
-        # 如果带 is_active 条件查不到，尝试不带条件
-        if not result or len(result) == 0:
-            logger.warning(f"⚠️ 带 is_active=1 条件查询失败，尝试不带条件查询")
-            sql_no_active = """
-                SELECT xiaomi_username, created_at, is_active
-                FROM xiaomi_account 
-                WHERE system_user_id = %s
-                ORDER BY updated_at DESC 
-                LIMIT 1
-            """
-            result = query(sql_no_active, (system_user_id,))
-            logger.info(f"📊 不带 is_active 条件的查询结果: {result}")
+        logger.info(f"📊 is_active=1 的绑定记录: {result}")
         
         if result and len(result) > 0:
-            logger.info(f"✅ 找到绑定账号: {result[0]['xiaomi_username']}, is_active={result[0].get('is_active')}")
+            logger.info(f"✅ 已绑定: {result[0]['xiaomi_username']}")
             return BindingStatusResponse(
                 is_bound=True,
                 username=result[0]["xiaomi_username"],
                 bound_at=str(result[0]["created_at"])
             )
         
-        logger.error(f"❌ 完全未找到绑定账号，system_user_id={system_user_id}")
+        logger.info(f"未激活绑定记录，视为未绑定: system_user_id={system_user_id}")
         return BindingStatusResponse(is_bound=False)
         
     except Exception as e:
@@ -1043,7 +1030,7 @@ async def get_xiaomi_devices(system_user_id: int, server: str = "cn"):
     """
     try:
         # 导入 MCP 设备服务
-        from services.mcp_device_service import get_mcp_device_service
+        from mcp_clients.mcp_device_service import get_mcp_device_service
         
         logger.info(f"📡 通过 MCP 服务获取用户 {system_user_id} 的设备列表")
         
@@ -1322,8 +1309,32 @@ async def unbind_xiaomi_account(system_user_id: int):
             """
             update(update_sql, (system_user_id,))
         else:
-            # StarRocks: 由于是DUPLICATE KEY表，不支持DELETE，插入一条标记删除的记录
-            logger.warning("StarRocks不支持DELETE，请手动处理或在查询时过滤")
+            # StarRocks：DUPLICATE KEY 表通常无 UPDATE，追加一条 is_active=0 作为最新状态（与绑定时的 INSERT 策略一致）
+            active_rows = query(
+                """
+                SELECT xiaomi_username, xiaomi_user_id, server
+                FROM xiaomi_account
+                WHERE system_user_id = %s AND is_active = 1
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (system_user_id,),
+            )
+            if active_rows:
+                r = active_rows[0]
+                credential_id = int(time.time() * 1000) + random.randint(1000, 9999)
+                uname = (r.get("xiaomi_username") or "").strip() or "_unbound_"
+                srv = (r.get("server") or "cn").strip() or "cn"
+                xuid = r.get("xiaomi_user_id")
+                insert_sql = """
+                    INSERT INTO xiaomi_account
+                    (id, system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server, is_active, created_at, updated_at)
+                    VALUES (%s, %s, %s, NULL, NULL, %s, %s, 0, NOW(), NOW())
+                """
+                insert(insert_sql, (credential_id, system_user_id, uname, xuid, srv))
+                logger.info(f"[StarRocks] 已写入解绑状态行 id={credential_id}")
+            else:
+                logger.info(f"[StarRocks] 无 is_active=1 记录，跳过追加解绑行")
 
         logger.info(f"✅ 用户 {system_user_id} 已解绑小米账号")
         return {"status": "success", "message": "小米账号已解绑"}

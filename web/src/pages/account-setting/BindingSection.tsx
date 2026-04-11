@@ -448,9 +448,14 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
                           </Tag>
                         )}
                       </div>
-                      <Text type="secondary" className="config-tile-desc" ellipsis={{ rows: 2 }}>
+                      <Paragraph
+                        type="secondary"
+                        className="config-tile-desc"
+                        ellipsis={{ rows: 2 }}
+                        style={{ marginBottom: 0 }}
+                      >
                         {item.blurb}
-                      </Text>
+                      </Paragraph>
                     </div>
                     <RightOutlined className="config-tile-chevron" aria-hidden />
                   </div>

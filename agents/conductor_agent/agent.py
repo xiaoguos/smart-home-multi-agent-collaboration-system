@@ -39,6 +39,10 @@ from windows_tools import (
     execute_powershell_command,
     execute_windows_shortcut
 )
+from esp32_audio_tools import (
+    list_esp32_audio_mcp_tools,
+    invoke_esp32_audio_mcp_tool,
+)
 
 memory = MemorySaver()
 
@@ -165,6 +169,14 @@ class ConductorAgent:
             # 加载系统提示词
             system_prompt = config_loader.get_agent_prompt('conductor')
             self.SYSTEM_PROMPT = system_prompt
+            if config_loader.get_esp32_audio_mcp_config().get("enabled"):
+                self.SYSTEM_PROMPT = (
+                    (self.SYSTEM_PROMPT or "")
+                    + "\n\n## ESP32 / Arduino 音频 MCP\n"
+                    "当用户需要 ESP32 录音、播放、串口音频等硬件相关操作时：先调用 list_esp32_audio_mcp_tools "
+                    "查看 MCP 暴露的工具名，再使用 invoke_esp32_audio_mcp_tool；"
+                    "参数 tool_name 须与该列表一致，arguments_json 为 JSON 对象字符串（无参数可用 \"{}\"）。\n"
+                )
             
         except Exception as e:
             logger.error(f"❌ 配置加载失败: {e}")
@@ -193,7 +205,9 @@ class ConductorAgent:
             send_wechat_to_multiple_friends,  # 群发微信消息
             manage_windows_app,  # Windows应用管理
             execute_powershell_command,  # PowerShell命令执行
-            execute_windows_shortcut  # Windows快捷键
+            execute_windows_shortcut,  # Windows快捷键
+            list_esp32_audio_mcp_tools,  # ESP32 音频 MCP：列出工具
+            invoke_esp32_audio_mcp_tool,  # ESP32 音频 MCP：调用工具
         ]
 
         self.graph = create_react_agent(

@@ -67,7 +67,7 @@ class DidaMCPService:
             if not self.mcp_path.exists():
                 logger.error(f"开发错误：滴答清单 MCP 服务文件不存在: {self.mcp_path}")
             else:
-                logger.error("开发错误：滴答清单 MCP 依赖未安装（pip install fastmcp）")
+                logger.error("开发错误：请安装官方 MCP Python SDK（pip install mcp）")
 
             return {"success": False, "message": "请先检查滴答清单MCP服务是否启动。"}
 
