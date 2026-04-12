@@ -5,9 +5,12 @@ ESP32 / Arduino 音频 MCP（stdio）客户端
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import math
 import os
+import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +43,20 @@ def _load_yaml_esp32_section() -> Dict[str, Any]:
         except Exception as e:
             logger.warning("读取 esp32_audio_mcp 配置失败: %s", e)
     return {}
+
+
+def _sine_test_pcm_s16le(
+    sample_rate: int, duration_ms: int, freq_hz: float, channels: int
+) -> bytes:
+    """生成短段 s16le 正弦测试音（多声道为交错相同采样）。"""
+    n = max(1, int(sample_rate * duration_ms / 1000))
+    ch = max(1, min(2, int(channels)))
+    out = bytearray()
+    for i in range(n):
+        s = int(32767 * 0.22 * math.sin(2 * math.pi * freq_hz * i / sample_rate))
+        for _ in range(ch):
+            out.extend(struct.pack("<h", s))
+    return bytes(out)
 
 
 def _parse_args(raw: Any) -> List[str]:
@@ -136,8 +153,8 @@ class Esp32AudioMCPService:
         if not self.enabled:
             return {
                 "success": False,
-                "message": "ESP32 音频 MCP 未启用。请在 config.yaml 的 esp32_audio_mcp.enabled 设为 true，"
-                "或设置 MOSS_ESP32_AUDIO_MCP_ENABLED=1，并配置 command/args。",
+                "message": "ESP32 音频 MCP 未启用。请在「账户 → 插件扩展 → 音频/ESP32」中启用并填写 command/args，"
+                "或在环境变量中设置 MOSS_ESP32_AUDIO_MCP_ENABLED=1（并配置 command/args）。",
             }
         if not self._check_mcp_available():
             return {"success": False, "message": "请安装 MCP 客户端依赖：pip install mcp"}
@@ -173,7 +190,8 @@ class Esp32AudioMCPService:
         if not self.enabled:
             return {
                 "success": False,
-                "message": "ESP32 音频 MCP 未启用。请配置 config.yaml 或 MOSS_ESP32_AUDIO_MCP_* 环境变量。",
+                "message": "ESP32 音频 MCP 未启用。请在「账户 → 插件扩展 → 音频/ESP32」中启用并填写 command/args，"
+                "或设置 MOSS_ESP32_AUDIO_MCP_* 环境变量。",
             }
         if not self._check_mcp_available():
             return {"success": False, "message": "请安装 MCP 客户端依赖：pip install mcp"}
@@ -206,6 +224,83 @@ class Esp32AudioMCPService:
         except Exception as e:
             logger.exception("调用 ESP32 MCP 工具失败: %s", tool_name)
             return {"success": False, "message": str(e)}
+
+    async def test_speaker_output(
+        self,
+        sample_rate: int = 16000,
+        channels: int = 1,
+        duration_ms: int = 400,
+        freq_hz: float = 440.0,
+        tool_name_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        列出 MCP 工具并调用扬声器播放类工具，下发一段短测试 PCM（与固件 esp32_audio_speaker_play_pcm 等兼容）。
+        """
+        listed = await self.list_mcp_tools()
+        if not listed.get("success"):
+            return {
+                "success": False,
+                "message": str(listed.get("message") or "无法列出 MCP 工具"),
+                "tool_name": None,
+                "mcp": listed,
+            }
+        tools = listed.get("tools") or []
+        names = [str(t.get("name") or "") for t in tools if t.get("name")]
+
+        tool_name: Optional[str] = None
+        override = (tool_name_override or "").strip()
+        if override:
+            if override in names:
+                tool_name = override
+            else:
+                return {
+                    "success": False,
+                    "message": f"未找到指定工具「{override}」。当前可用: {', '.join(names) or '无'}",
+                    "tool_name": None,
+                    "mcp": {"tools": names},
+                }
+        else:
+            for n in names:
+                if n == "esp32_audio_speaker_play_pcm":
+                    tool_name = n
+                    break
+            if not tool_name:
+                for n in names:
+                    nl = n.lower()
+                    if "speaker" in nl and ("play" in nl or "pcm" in nl):
+                        tool_name = n
+                        break
+            if not tool_name:
+                return {
+                    "success": False,
+                    "message": "未找到扬声器播放类工具（例如 esp32_audio_speaker_play_pcm）。"
+                    "请确认 MCP 已启动且 tools/list 中包含播音工具。",
+                    "tool_name": None,
+                    "mcp": {"tools": names},
+                }
+
+        pcm = _sine_test_pcm_s16le(sample_rate, duration_ms, freq_hz, channels)
+        b64 = base64.b64encode(pcm).decode("ascii")
+        arguments: Dict[str, Any] = {
+            "pcm_base64": b64,
+            "sample_rate": sample_rate,
+            "channels": channels,
+        }
+        out = await self.call_tool(tool_name, arguments)
+        if not out.get("success"):
+            return {
+                "success": False,
+                "message": str(out.get("message") or "调用 MCP 播音工具失败"),
+                "tool_name": tool_name,
+                "mcp": out,
+            }
+        return {
+            "success": True,
+            "message": f"已下发测试音（约 {duration_ms / 1000:.1f} 秒、{int(freq_hz)}Hz）；"
+            "若扬声器与固件正常，应能听到提示音。",
+            "tool_name": tool_name,
+            "mcp": out,
+        }
 
 
 _esp32_audio_mcp_service: Optional[Esp32AudioMCPService] = None

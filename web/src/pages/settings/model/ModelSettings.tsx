@@ -9,6 +9,7 @@ import {
   Table,
   Modal,
   Space,
+  Tag,
 } from "antd";
 import React, { useState, useEffect } from "react";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
@@ -84,15 +85,19 @@ const ModelSettings: React.FC = () => {
   };
 
   const columns = [
-    { title: "模型名称", dataIndex: "model_name", key: "model_name" },
+    {
+      title: "模型名称",
+      dataIndex: "model_name",
+      key: "model_name",
+      render: (value: string, record: AIModel) => (
+        <Space size={8}>
+          <span>{value}</span>
+          {record.is_default ? <Tag color="blue">默认</Tag> : null}
+        </Space>
+      ),
+    },
     { title: "提供商", dataIndex: "provider", key: "provider" },
     { title: "API Base", dataIndex: "api_base", key: "api_base", ellipsis: true },
-    {
-      title: "默认",
-      dataIndex: "is_default",
-      key: "is_default",
-      render: (val: boolean) => (val ? "是" : "否"),
-    },
     {
       title: "状态",
       dataIndex: "is_active",

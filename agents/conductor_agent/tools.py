@@ -1110,11 +1110,15 @@ def list_xiaomi_devices(system_user_id: int, server: str = "cn"):
     import os
     
     try:
-        # 添加后端路径到 sys.path（复用后端代码）
-        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        backend_path = os.path.join(current_dir, "app", "backend-python")
-        if backend_path not in sys.path:
-            sys.path.insert(0, backend_path)
+        # 添加后端路径到 sys.path（复用 web/backend-python 下的 mcp_clients）
+        here = os.path.abspath(os.path.dirname(__file__))
+        repo_root = os.path.abspath(os.path.join(here, "..", ".."))
+        for sub in ("web/backend-python", "app/backend-python"):
+            backend_path = os.path.join(repo_root, sub)
+            if os.path.isdir(os.path.join(backend_path, "mcp_clients")):
+                if backend_path not in sys.path:
+                    sys.path.insert(0, backend_path)
+                break
         
         # 导入后端的 MCP 设备服务（复用已有代码）
         from mcp_clients.mcp_device_service import get_mcp_device_service

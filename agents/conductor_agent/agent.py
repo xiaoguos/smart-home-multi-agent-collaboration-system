@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, FrozenSet, List, Set
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -49,6 +49,40 @@ memory = MemorySaver()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 不依赖账户级插件开关的基础能力（Windows 本地能力视为核心）
+_CORE_TOOL_NAMES: FrozenSet[str] = frozenset(
+    {
+        "list_available_agents",
+        "execute_agent_command",
+        "get_agent_status",
+        "control_device",
+        "get_system_overview",
+        "analyze_user_behavior",
+        "get_user_insights",
+        "query_data_mining_agent",
+        "search_baidu_ai",
+        "manage_windows_app",
+        "execute_powershell_command",
+        "execute_windows_shortcut",
+    }
+)
+
+# 插件 key -> 工具名（须与 @tool 名称一致；与后端 PLUGIN_MODE_KEYS 对齐）
+_PLUGIN_TO_TOOL_NAMES: Dict[str, FrozenSet[str]] = {
+    "xiaomi": frozenset({"list_xiaomi_devices"}),
+    "dida": frozenset({"manage_dida_task", "manage_dida_project"}),
+    "wechat": frozenset(
+        {
+            "get_wechat_chat_history",
+            "send_wechat_message",
+            "send_multiple_wechat_messages",
+            "send_wechat_to_multiple_friends",
+        }
+    ),
+    "audio": frozenset({"list_esp32_audio_mcp_tools", "invoke_esp32_audio_mcp_tool"}),
+}
+
+
 class ConductorAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
     
@@ -89,16 +123,10 @@ class ConductorAgent:
 - 获取用户洞察：使用 get_user_insights 工具
 - **场景智能分析**：使用 query_data_mining_agent 工具（重要！）
 
-## 米家设备信息管理（重要更新）：
-**当用户询问"我有哪些设备"、"设备列表"、"米家设备"时，必须使用 list_xiaomi_devices 工具**
-
-- 获取米家设备列表：使用 list_xiaomi_devices 工具
-  - 参数：
-    - **system_user_id（必传）**：当前登录用户的系统用户ID，固定为 1000000001（admin用户）
-    - server（可选）：服务器区域，默认cn
-  - **重要**：此工具会自动从数据库读取用户的米家账户凭证，**绝对不要要求用户提供账号密码**
-  - 如果工具返回"未查询到绑定的米家账户"，告知用户需要先通过后端API绑定
-  - 返回：所有米家设备的详细信息，包括Token、IP、MAC等
+## 米家与其它插件能力
+若下方系统提示中列出了「插件：米家 / 滴答 / 微信」等段落，表明当前已启用对应能力；请严格按段落说明选用工具。
+未列出的插件即未对当前 Agent 开放，不要调用相关工具名。
+当用户询问「我有哪些设备 / 米家设备」且已启用米家插件时，使用 list_xiaomi_devices，**system_user_id 必传**（与当前登录用户一致），勿索要米家密码。
 
 设备控制指南：
 当用户说"开启空调"、"打开空调"、"关闭空调"等命令时，使用 control_device 工具：
@@ -166,8 +194,23 @@ class ConductorAgent:
 
         self._model_signature: tuple[str, str, str, float] | None = None
         self._prompt_signature: str | None = None
-        
-        self.tools = [
+        self._plugin_signature: tuple[str, ...] | None = None
+        self._tool_names_signature: tuple[str, ...] | None = None
+
+        self.tools: List[Any] = []
+
+        # 启动时初始化一次；后续每次 invoke 前会按数据库配置热更新
+        self._refresh_runtime_config(force=True)
+
+    def _collect_conductor_tools(self) -> List[Any]:
+        """按 Agent 插件配置与 config.yaml 裁剪 LangChain 工具列表。"""
+        eff = self.config_loader.get_effective_agent_plugin_keys("conductor")
+        eff_set: Set[str] = set(eff)
+        allowed: Set[str] = set(_CORE_TOOL_NAMES)
+        for pk in eff:
+            allowed |= set(_PLUGIN_TO_TOOL_NAMES.get(pk, frozenset()))
+
+        ordered = [
             list_available_agents,
             execute_agent_command,
             get_agent_status,
@@ -176,62 +219,88 @@ class ConductorAgent:
             analyze_user_behavior,
             get_user_insights,
             query_data_mining_agent,
-            list_xiaomi_devices, 
-            search_baidu_ai,  # 百度AI搜索保底方案
-            manage_dida_task,  # 滴答清单任务管理
-            manage_dida_project,  # 滴答清单项目管理
-            get_wechat_chat_history,  # 微信聊天记录获取
-            send_wechat_message,  # 微信消息发送
-            send_multiple_wechat_messages,  # 批量发送微信消息
-            send_wechat_to_multiple_friends,  # 群发微信消息
-            manage_windows_app,  # Windows应用管理
-            execute_powershell_command,  # PowerShell命令执行
-            execute_windows_shortcut,  # Windows快捷键
-            list_esp32_audio_mcp_tools,  # ESP32 音频 MCP：列出工具
-            invoke_esp32_audio_mcp_tool,  # ESP32 音频 MCP：调用工具
+            list_xiaomi_devices,
+            search_baidu_ai,
+            manage_dida_task,
+            manage_dida_project,
+            get_wechat_chat_history,
+            send_wechat_message,
+            send_multiple_wechat_messages,
+            send_wechat_to_multiple_friends,
+            manage_windows_app,
+            execute_powershell_command,
+            execute_windows_shortcut,
+            list_esp32_audio_mcp_tools,
+            invoke_esp32_audio_mcp_tool,
         ]
 
-        # 启动时初始化一次；后续每次 invoke 前会按数据库配置热更新
-        self._refresh_runtime_config(force=True)
+        out: List[Any] = []
+        for t in ordered:
+            name = getattr(t, "name", None) or ""
+            if name not in allowed:
+                continue
+            if name in ("list_esp32_audio_mcp_tools", "invoke_esp32_audio_mcp_tool"):
+                if "audio" not in eff_set:
+                    continue
+                if not self.config_loader.get_esp32_audio_mcp_config().get("enabled"):
+                    continue
+            out.append(t)
+        return out
 
     def _build_system_prompt(self) -> str:
         try:
-            system_prompt = self.config_loader.get_agent_prompt('conductor')
+            system_prompt = self.config_loader.get_agent_prompt("conductor")
         except Exception:
             system_prompt = None
         prompt = system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
-        if self.config_loader.get_esp32_audio_mcp_config().get("enabled"):
-            prompt = (
-                (prompt or "")
-                + "\n\n## ESP32 / Arduino 音频 MCP\n"
-                "当用户需要 ESP32 录音、播放、串口音频等硬件相关操作时：先调用 list_esp32_audio_mcp_tools "
-                "查看 MCP 暴露的工具名，再使用 invoke_esp32_audio_mcp_tool；"
-                "参数 tool_name 须与该列表一致，arguments_json 为 JSON 对象字符串（无参数可用 \"{}\"）。\n"
+
+        eff = self.config_loader.get_effective_agent_plugin_keys("conductor")
+        esp32_cfg = self.config_loader.get_esp32_audio_mcp_config()
+        audio_first = ""
+        if "audio" in eff and bool(esp32_cfg.get("enabled")):
+            audio_first = (
+                "## 音频输出优先（ESP32 / Arduino MCP）\n"
+                "在「账户 → 插件扩展」中为音频/ESP32 配置并启用 MCP（或沿用 config.yaml 的 esp32_audio_mcp）时，"
+                "凡涉及录音、播放、串口音频及硬件音频输入输出，**必须优先**使用 list_esp32_audio_mcp_tools 与 "
+                "invoke_esp32_audio_mcp_tool 完成；先列出工具名再调用，arguments_json 为 JSON 对象字符串（无参可用 \"{}\"）。"
+                "勿用其他途径替代，除非用户明确要求。\n\n"
             )
+        prompt = audio_first + (prompt or "")
+
+        addon = self.config_loader.build_agent_plugin_prompt_addon("conductor")
+        if addon:
+            prompt = (prompt or "").rstrip() + "\n\n" + addon
         return prompt
 
     def _refresh_runtime_config(self, force: bool = False) -> None:
         ai_config = self.config_loader.get_ai_model_config_for_agent("conductor")
         model_signature = (
-            str(ai_config['model']),
-            str(ai_config['api_key']),
-            str(ai_config['api_base']),
-            float(ai_config['temperature']),
+            str(ai_config["model"]),
+            str(ai_config["api_key"]),
+            str(ai_config["api_base"]),
+            float(ai_config["temperature"]),
         )
         prompt = self._build_system_prompt()
+        new_tools = self._collect_conductor_tools()
+        plugin_signature = tuple(sorted(self.config_loader.get_effective_agent_plugin_keys("conductor")))
+        tool_names_sig = tuple(sorted(getattr(t, "name", "") for t in new_tools))
 
         if (
             not force
             and self._model_signature == model_signature
             and self._prompt_signature == prompt
+            and self._plugin_signature == plugin_signature
+            and self._tool_names_signature == tool_names_sig
         ):
             return
 
+        self.tools = new_tools
+
         self.model = ChatOpenAI(
-            model=ai_config['model'],
-            api_key=ai_config['api_key'],
-            base_url=ai_config['api_base'],
-            temperature=ai_config['temperature'],
+            model=ai_config["model"],
+            api_key=ai_config["api_key"],
+            base_url=ai_config["api_base"],
+            temperature=ai_config["temperature"],
         )
         self.SYSTEM_PROMPT = prompt
         self.graph = create_react_agent(
@@ -242,7 +311,14 @@ class ConductorAgent:
         )
         self._model_signature = model_signature
         self._prompt_signature = prompt
-        logger.info("♻️ Conductor Agent 已应用最新模型配置: %s", ai_config['model'])
+        self._plugin_signature = plugin_signature
+        self._tool_names_signature = tool_names_sig
+        logger.info(
+            "♻️ Conductor Agent 已刷新：模型=%s 插件=%s 工具数=%s",
+            ai_config["model"],
+            ",".join(plugin_signature) or "(仅核心)",
+            len(self.tools),
+        )
 
     async def invoke(self, query, context_id) -> dict[str, Any]:
         """非流式调用，直接返回最终结果"""

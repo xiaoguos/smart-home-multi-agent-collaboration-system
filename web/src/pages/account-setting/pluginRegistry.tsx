@@ -1,12 +1,22 @@
 import type { ReactNode } from "react";
 import {
+  CameraOutlined,
   CheckSquareOutlined,
   CloudOutlined,
   HomeOutlined,
+  MessageOutlined,
   RocketOutlined,
+  SoundOutlined,
 } from "@ant-design/icons";
 
-export type ConfigPluginKey = "xiaomi" | "dida" | "openclaw" | "zeroclaw";
+export type ConfigPluginKey =
+  | "xiaomi"
+  | "dida"
+  | "wechat"
+  | "openclaw"
+  | "zeroclaw"
+  | "camera"
+  | "audio";
 
 export interface ConfigPluginDefinition {
   key: ConfigPluginKey;
@@ -30,6 +40,12 @@ export const ACCOUNT_SETTING_PLUGINS: ConfigPluginDefinition[] = [
     icon: <CheckSquareOutlined />,
   },
   {
+    key: "wechat",
+    title: "微信",
+    blurb: "微信 MCP：聊天记录与消息发送（需网关下游已部署）",
+    icon: <MessageOutlined />,
+  },
+  {
     key: "openclaw",
     title: "OpenClaw",
     blurb: "OpenClaw 页面嵌入侧边栏，与 ZeroClaw 分开配置",
@@ -40,5 +56,17 @@ export const ACCOUNT_SETTING_PLUGINS: ConfigPluginDefinition[] = [
     title: "ZeroClaw",
     blurb: "ZeroClaw 页面嵌入侧边栏，与 OpenClaw 分开配置",
     icon: <CloudOutlined />,
+  },
+  {
+    key: "camera",
+    title: "摄像头插件",
+    blurb: "支持本地摄像头与远程摄像头输入接入",
+    icon: <CameraOutlined />,
+  },
+  {
+    key: "audio",
+    title: "音频 / ESP32",
+    blurb: "在本页配置 stdio MCP（command/args）；启用后可在 Agent 中分配，模型提示优先走该 MCP",
+    icon: <SoundOutlined />,
   },
 ];

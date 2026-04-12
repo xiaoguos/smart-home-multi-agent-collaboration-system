@@ -19,7 +19,9 @@ from api.dida_auth import router as dida_router
 from api.auth import router as auth_router
 from api.conversation import router as conversation_router
 from api.device_operations import router as device_operations_router
+import database
 from database import init_database, DatabaseConnectionError
+from services.agent_runtime_service import AgentRuntimeService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +40,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ 未知错误,请联系开发者解决: {e}")
         sys.exit(1)
+
+    if database.db is not None:
+        try:
+            summary = AgentRuntimeService(database.db).sync_runtimes_with_agent_config()
+            logger.info(
+                "✅ 已按 agent_config.is_enabled 同步本地 Agent 进程: stopped=%s started=%s errors=%s",
+                summary.get("stopped"),
+                summary.get("started"),
+                len(summary.get("errors") or []),
+            )
+        except Exception as e:
+            logger.warning(
+                "启动时未能将 Agent 进程与配置对齐（可在保存 Agent 或重启后重试）: %s",
+                e,
+                exc_info=True,
+            )
 
     yield
     logger.info("👋 Moss AI 后端服务关闭")

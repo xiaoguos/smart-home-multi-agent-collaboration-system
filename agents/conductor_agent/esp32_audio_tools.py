@@ -27,6 +27,21 @@ def _ensure_backend_import_path() -> None:
             sys.path.insert(0, s)
 
 
+def _ensure_agents_import_path() -> None:
+    agents_dir = Path(__file__).resolve().parents[1]
+    s = str(agents_dir)
+    if s not in sys.path:
+        sys.path.insert(0, s)
+
+
+def _esp32_mcp_yaml_config() -> Dict[str, Any]:
+    """与 Conductor 一致：优先数据库 plugin.audio.mcp_config，否则 config.yaml。"""
+    _ensure_agents_import_path()
+    from config_loader import get_config_loader
+
+    return get_config_loader(strict_mode=False).get_esp32_audio_mcp_config()
+
+
 def _run_async(coro):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -62,7 +77,7 @@ def list_esp32_audio_mcp_tools() -> str:
         _ensure_backend_import_path()
         from mcp_clients.esp32_audio_mcp_service import get_esp32_audio_mcp_service
 
-        svc = get_esp32_audio_mcp_service()
+        svc = get_esp32_audio_mcp_service(yaml_config=_esp32_mcp_yaml_config())
         result = _run_async(svc.list_mcp_tools())
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -100,7 +115,7 @@ def invoke_esp32_audio_mcp_tool(tool_name: str, arguments_json: Optional[str] = 
         _ensure_backend_import_path()
         from mcp_clients.esp32_audio_mcp_service import get_esp32_audio_mcp_service
 
-        svc = get_esp32_audio_mcp_service()
+        svc = get_esp32_audio_mcp_service(yaml_config=_esp32_mcp_yaml_config())
         result = _run_async(svc.call_tool(tool_name, args))
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:

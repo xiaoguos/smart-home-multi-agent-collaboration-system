@@ -12,12 +12,14 @@ export function useClawSettings(): ClawSettings & {
   const userId = user?.id;
 
   const [settings, setSettings] = useState<ClawSettings>(() =>
-    userId ? getClawSettings(userId) : { openclawUrl: "", zeroclawUrl: "" },
+    userId
+      ? getClawSettings(userId)
+      : { openclawUrl: "", zeroclawUrl: "", openclawEnabled: false, zeroclawEnabled: false },
   );
 
   useEffect(() => {
     if (!userId) {
-      setSettings({ openclawUrl: "", zeroclawUrl: "" });
+      setSettings({ openclawUrl: "", zeroclawUrl: "", openclawEnabled: false, zeroclawEnabled: false });
       return;
     }
     const sync = () => setSettings(getClawSettings(userId));
@@ -30,8 +32,8 @@ export function useClawSettings(): ClawSettings & {
     };
   }, [userId]);
 
-  const hasOpen = Boolean(settings.openclawUrl);
-  const hasZero = Boolean(settings.zeroclawUrl);
+  const hasOpen = Boolean(settings.openclawUrl) && settings.openclawEnabled;
+  const hasZero = Boolean(settings.zeroclawUrl) && settings.zeroclawEnabled;
 
   return {
     ...settings,

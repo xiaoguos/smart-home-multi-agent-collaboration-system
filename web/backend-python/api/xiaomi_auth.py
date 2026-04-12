@@ -36,6 +36,49 @@ router = APIRouter()
 SESSIONS: Dict[str, dict] = {}
 
 
+def _set_plugin_mode_enabled(plugin_key: str) -> None:
+    """绑定成功后默认启用插件（支持再次手动关闭）。"""
+    config_key = f"plugin.{plugin_key}.mode"
+    description = f"{plugin_key} 插件模式（enabled/disabled/unused）"
+    exists = query(
+        "SELECT id FROM system_config WHERE config_key = %s LIMIT 1",
+        (config_key,),
+    )
+    if exists:
+        update(
+            """
+            UPDATE system_config
+            SET config_value = 'enabled', config_type = 'string', category = 'plugin',
+                description = %s, is_active = 1, updated_at = NOW()
+            WHERE config_key = %s
+            """,
+            (description, config_key),
+        )
+        return
+
+    db_type = get_db_type()
+    if db_type == "starrocks":
+        max_row = query("SELECT COALESCE(MAX(id), 0) AS max_id FROM system_config")
+        next_id = int(max_row[0]["max_id"]) + 1 if max_row else 1
+        insert(
+            """
+            INSERT INTO system_config
+            (id, config_key, config_value, config_type, category, description, is_active, created_at, updated_at)
+            VALUES (%s, %s, 'enabled', 'string', 'plugin', %s, 1, NOW(), NOW())
+            """,
+            (next_id, config_key, description),
+        )
+    else:
+        insert(
+            """
+            INSERT INTO system_config
+            (config_key, config_value, config_type, category, description, is_active, created_at, updated_at)
+            VALUES (%s, 'enabled', 'string', 'plugin', %s, 1, NOW(), NOW())
+            """,
+            (config_key, description),
+        )
+
+
 class XiaomiCloudConnector:
     """小米云连接器（基于 token_extractor.py）"""
 
@@ -1280,6 +1323,8 @@ async def save_xiaomi_credentials(system_user_id: int, xiaomi_username: str,
             """
             insert(insert_sql, (credential_id, system_user_id, xiaomi_username, service_token, ssecurity, xiaomi_user_id, server))
             logger.info(f"[StarRocks] 用户 {system_user_id} 成功绑定小米账号: {xiaomi_username}")
+
+        _set_plugin_mode_enabled("xiaomi")
         
     except Exception as e:
         logger.error(f"save_xiaomi_credentials error: {e}")

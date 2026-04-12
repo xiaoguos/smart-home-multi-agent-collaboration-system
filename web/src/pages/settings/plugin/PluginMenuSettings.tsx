@@ -10,7 +10,7 @@ const PluginMenuSettings: React.FC = () => {
     <>
       <div className="setting-section">
         <h2 className="setting-page-title">插件菜单</h2>
-        <p className="setting-page-desc">插件系统生成一级菜单，统一管理账号绑定与嵌入配置。</p>
+        <p className="setting-page-desc">统一管理插件的开启状态、绑定状态与详细配置。</p>
       </div>
       <BindingSection userInfo={userInfo} />
     </>

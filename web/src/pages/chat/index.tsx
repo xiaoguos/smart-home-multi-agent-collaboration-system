@@ -17,7 +17,7 @@ import remarkGfm from 'remark-gfm';
 import "./chat.sass";
 import { sendChatMessage } from "../../api/chat";
 import { checkBindingStatus } from "../../api/xiaomi";
-import { getAgents, type Agent } from "../../api/config";
+import { getAgents, syncAgentDeviceOfflinePolicy, type Agent } from "../../api/config";
 import {
   getConversationList,
   getConversationHistory,
@@ -178,6 +178,14 @@ const Chat: React.FC = () => {
 
   const loadEnabledAgents = async () => {
     try {
+      const userId = getUserId();
+      if (userId) {
+        try {
+          await syncAgentDeviceOfflinePolicy(userId);
+        } catch {
+          // 米家 MCP 不可用时跳过自动禁用策略
+        }
+      }
       const agents = await getAgents(true);
       setEnabledAgents(agents);
 
@@ -878,17 +886,6 @@ const Chat: React.FC = () => {
                 </Button>
               }
               closable
-            />
-          </div>
-        )}
-
-        {enabledAgents.length === 0 && (
-          <div style={{ padding: "16px 16px 0", flexShrink: 0 }}>
-            <Alert
-              message="当前没有可用Agent"
-              description="请前往设置页启用至少一个Agent后再发起对话。"
-              type="warning"
-              showIcon
             />
           </div>
         )}

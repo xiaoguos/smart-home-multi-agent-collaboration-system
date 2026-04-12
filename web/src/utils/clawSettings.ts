@@ -3,10 +3,17 @@ const STORAGE_PREFIX = "claw_settings_";
 export type ClawSettings = {
   openclawUrl: string;
   zeroclawUrl: string;
+  openclawEnabled: boolean;
+  zeroclawEnabled: boolean;
 };
 
 function defaultSettings(): ClawSettings {
-  return { openclawUrl: "", zeroclawUrl: "" };
+  return {
+    openclawUrl: "",
+    zeroclawUrl: "",
+    openclawEnabled: true,
+    zeroclawEnabled: true,
+  };
 }
 
 export function getClawSettings(userId: number): ClawSettings {
@@ -17,6 +24,8 @@ export function getClawSettings(userId: number): ClawSettings {
     return {
       openclawUrl: typeof parsed.openclawUrl === "string" ? parsed.openclawUrl.trim() : "",
       zeroclawUrl: typeof parsed.zeroclawUrl === "string" ? parsed.zeroclawUrl.trim() : "",
+      openclawEnabled: typeof parsed.openclawEnabled === "boolean" ? parsed.openclawEnabled : true,
+      zeroclawEnabled: typeof parsed.zeroclawEnabled === "boolean" ? parsed.zeroclawEnabled : true,
     };
   } catch {
     return defaultSettings();

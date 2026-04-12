@@ -6,6 +6,7 @@ Expose a unified MCP server that can proxy calls to other MCP services.
 Default downstream services:
 - device_query: mcp/device_query_mcp.py
 - dida_todolist: mcp/didatodolist-mcp/main.py
+- wechat: mcp/mcp_server_wechat/mcp_server_wechat/__main__.py
 
 Optional environment overrides:
 - MCP_GATEWAY_PYTHON: python executable path
@@ -59,6 +60,14 @@ def _default_services() -> dict[str, dict[str, Any]]:
             "args": [str(MCP_DIR / "didatodolist-mcp" / "main.py")],
             "cwd": str(MCP_DIR / "didatodolist-mcp"),
             "env": {},
+        },
+        "wechat": {
+            "command": _python_cmd(),
+            "args": [str(MCP_DIR / "mcp_server_wechat" / "mcp_server_wechat" / "__main__.py")],
+            "cwd": str(MCP_DIR / "mcp_server_wechat"),
+            "env": {
+                "PYTHONPATH": str(MCP_DIR / "mcp_server_wechat"),
+            },
         },
     }
 

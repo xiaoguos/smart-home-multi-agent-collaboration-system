@@ -1,10 +1,11 @@
 import sys
 import os
+import json
 import yaml
 import pymysql
 from pymysql.cursors import DictCursor
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,33 @@ class DatabaseConnectionError(Exception):
 class ConfigLoadError(Exception):
     """配置加载错误"""
     pass
+
+
+# 与 web/backend-python/services/config_service.PLUGIN_MODE_KEYS 保持一致
+_KNOWN_PLUGIN_KEYS: Tuple[str, ...] = (
+    "xiaomi",
+    "dida",
+    "wechat",
+    "openclaw",
+    "zeroclaw",
+    "camera",
+    "audio",
+)
+
+# 仅当 Agent 已启用对应插件时追加到系统提示（简要能力说明）
+_PLUGIN_PROMPT_BLURBS: Dict[str, str] = {
+    "xiaomi": (
+        "## 插件：米家\n"
+        "可查询用户已绑定账号下的米家设备列表与在线状态；"
+        "请使用 list_xiaomi_devices 并传入 system_user_id，勿向用户索要米家密码。"
+    ),
+    "dida": "## 插件：滴答清单\n可使用 manage_dida_task / manage_dida_project 管理任务与项目（需账号已绑定）。",
+    "wechat": "## 插件：微信\n可通过微信相关工具查询聊天记录或发送消息（需微信 MCP 可用）。",
+    "openclaw": "## 插件：OpenClaw\n侧栏嵌入与页面联动能力（由全局配置启用）。",
+    "zeroclaw": "## 插件：ZeroClaw\n侧栏嵌入与页面联动能力（由全局配置启用）。",
+    "camera": "## 插件：摄像头\n本地/远程摄像头接入能力（由全局配置启用）。",
+    # audio：由 conductor 在系统提示最前单独注入「音频优先」段落，此处不重复追加
+}
 
 
 class AgentConfigLoader:
@@ -551,10 +579,137 @@ class AgentConfigLoader:
         """获取所有 Agent 的配置"""
         return self.agents_config
 
+    def _get_esp32_audio_mcp_from_db(self) -> Optional[Dict[str, Any]]:
+        """读取账户插件扩展中保存的 ESP32 音频 MCP 配置（system_config.plugin.audio.mcp_config）。"""
+        conn = None
+        cursor = None
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT config_value, config_type
+                FROM system_config
+                WHERE config_key = %s AND is_active = TRUE
+                LIMIT 1
+                """,
+                ("plugin.audio.mcp_config",),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            raw_val = row.get("config_value")
+            if raw_val is None or str(raw_val).strip() == "":
+                return None
+            raw_str = str(raw_val).strip()
+            try:
+                parsed = json.loads(raw_str)
+            except json.JSONDecodeError:
+                logger.warning("plugin.audio.mcp_config 不是合法 JSON，已忽略")
+                return None
+            if not isinstance(parsed, dict):
+                return None
+            return parsed
+        except Exception as e:
+            logger.warning("读取 ESP32 音频 MCP 数据库配置失败: %s", e)
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
     def get_esp32_audio_mcp_config(self) -> Dict[str, Any]:
-        """获取 ESP32 音频 MCP（stdio）插件配置，见根目录 config.yaml 中 esp32_audio_mcp。"""
+        """
+        ESP32 音频 MCP（stdio）配置。
+        优先使用账户「插件扩展」页面写入的数据库配置 plugin.audio.mcp_config；
+        若无记录则回退根目录 config.yaml 的 esp32_audio_mcp 或别名 esp32_arduino。
+        """
+        db_cfg = self._get_esp32_audio_mcp_from_db()
+        if db_cfg is not None:
+            return db_cfg
         raw = self.config.get("esp32_audio_mcp")
+        if not isinstance(raw, dict) or not raw:
+            raw = self.config.get("esp32_arduino")
         return raw if isinstance(raw, dict) else {}
+
+    def _load_plugin_mode_map(self) -> Dict[str, str]:
+        """从 system_config 读取 plugin.<key>.mode。"""
+        modes: Dict[str, str] = {k: "unused" for k in _KNOWN_PLUGIN_KEYS}
+        conn = self._get_db_connection()
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join(["%s"] * len(_KNOWN_PLUGIN_KEYS))
+            cfg_keys = [f"plugin.{k}.mode" for k in _KNOWN_PLUGIN_KEYS]
+            cursor.execute(
+                f"SELECT config_key, config_value FROM system_config WHERE config_key IN ({placeholders}) AND is_active = TRUE",
+                tuple(cfg_keys),
+            )
+            for row in cursor.fetchall() or []:
+                ck = str(row.get("config_key") or "")
+                if not ck.startswith("plugin.") or not ck.endswith(".mode"):
+                    continue
+                pk = ck[len("plugin.") : -len(".mode")]
+                if pk not in modes:
+                    continue
+                raw = row.get("config_value")
+                mode = str(raw).strip().lower() if raw is not None else "unused"
+                if mode not in ("enabled", "disabled", "unused"):
+                    mode = "unused"
+                modes[pk] = mode
+        finally:
+            cursor.close()
+            conn.close()
+        return modes
+
+    def get_effective_agent_plugin_keys(self, agent_code: str) -> List[str]:
+        """
+        当前 Agent 实际可用的插件 key（全局为 enabled 且 Agent 已分配）。
+        若未配置过 agent_plugins.<code>，则默认等同「当前所有已开启的插件」。
+        """
+        code = (agent_code or "").strip()
+        if not code:
+            return []
+        modes = self._load_plugin_mode_map()
+        conn = self._get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT config_value
+                FROM system_config
+                WHERE config_key = %s AND is_active = TRUE
+                LIMIT 1
+                """,
+                (f"agent_plugins.{code}",),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return [k for k, m in modes.items() if m == "enabled"]
+            raw_v = row.get("config_value")
+            if raw_v is None or str(raw_v).strip() == "":
+                return []
+            try:
+                parsed = json.loads(str(raw_v))
+            except json.JSONDecodeError:
+                return []
+            if not isinstance(parsed, list):
+                return []
+            keys = [str(x).strip().lower() for x in parsed if str(x).strip()]
+            return [k for k in keys if modes.get(k) == "enabled"]
+        finally:
+            cursor.close()
+            conn.close()
+
+    def build_agent_plugin_prompt_addon(self, agent_code: str) -> str:
+        """为系统提示拼接已启用插件的说明段落（无配置则不追加）。"""
+        keys = self.get_effective_agent_plugin_keys(agent_code)
+        parts: List[str] = []
+        for k in keys:
+            blurb = _PLUGIN_PROMPT_BLURBS.get(k)
+            if blurb:
+                parts.append(blurb)
+        return "\n\n".join(parts) if parts else ""
 
 
 # 全局配置加载器实例
