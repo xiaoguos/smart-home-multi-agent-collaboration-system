@@ -21,7 +21,7 @@ class ConfigLoadError(Exception):
 
 
 class AgentConfigLoader:
-    """Agent配置加载器类 - 支持从 config.yaml 和数据库加载配置"""
+    """Agent配置加载器类 - 支持从 .env/config.yaml 和数据库加载配置"""
     
     def __init__(self, config_path: str = None, strict_mode: bool = True):
         """
@@ -31,12 +31,15 @@ class AgentConfigLoader:
             config_path: YAML配置文件路径，如果为None则自动查找
             strict_mode: 严格模式，如果为True则数据库连接失败时抛出异常
         """
+        # 先尝试加载 .env（仅设置尚未存在的环境变量）
+        self.loaded_env_file = self._load_env_file()
+
         # 自动查找 config.yaml
         if config_path is None:
             config_path = self._find_config_file()
         
         self.config = self._load_yaml_config(config_path)
-        self.db_config = self.config.get('database', {}).get('starrocks', {})
+        self.db_config = self._resolve_db_config()
         self.agents_config = self.config.get('agents', {})
         self.backend_config = self.config.get('backend', {})
         self.logging_config = self.config.get('logging', {})
@@ -71,6 +74,106 @@ class AgentConfigLoader:
         except Exception as e:
             logger.error(f"加载配置文件失败: {e}")
             return {}
+
+    def _find_env_file(self) -> Optional[Path]:
+        """按优先级查找 .env 文件，兼容历史 ',env' 命名。"""
+        candidates: list[Path] = []
+
+        custom_env = os.getenv("AGENT_ENV_FILE")
+        if custom_env:
+            candidates.append(Path(custom_env).expanduser())
+
+        cwd = Path.cwd()
+        candidates.extend([cwd / ".env", cwd / ",env"])
+
+        if sys.argv and sys.argv[0]:
+            try:
+                script_dir = Path(sys.argv[0]).resolve().parent
+                candidates.extend([script_dir / ".env", script_dir / ",env"])
+            except Exception:
+                pass
+
+        agents_dir = Path(__file__).resolve().parent
+        project_root = agents_dir.parent
+        candidates.extend([
+            agents_dir / ".env",
+            project_root / ".env",
+        ])
+
+        seen: set[str] = set()
+        for candidate in candidates:
+            try:
+                resolved = str(candidate.resolve())
+            except Exception:
+                resolved = str(candidate)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _load_env_file(self) -> Optional[str]:
+        """加载 .env 文件到进程环境变量（不覆盖已存在变量）。"""
+        env_file = self._find_env_file()
+        if not env_file:
+            return None
+
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("export "):
+                        line = line[7:].strip()
+                    if "=" not in line:
+                        continue
+
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if not key:
+                        continue
+
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                        value = value[1:-1]
+
+                    if key not in os.environ:
+                        os.environ[key] = value
+
+            logger.info("已加载环境变量文件: %s", env_file)
+            return str(env_file)
+        except Exception as e:
+            logger.warning("加载环境变量文件失败: %s, err=%s", env_file, e)
+            return None
+
+    def _resolve_db_config(self) -> Dict[str, Any]:
+        """解析数据库配置：环境变量优先，缺失项回退 config.yaml。"""
+        yaml_db_config = self.config.get("database", {}).get("starrocks", {})
+        db_config = dict(yaml_db_config) if isinstance(yaml_db_config, dict) else {}
+
+        env_map = {
+            "type": "DATABASE_TYPE",
+            "host": "DATABASE_HOST",
+            "user": "DATABASE_USER",
+            "password": "DATABASE_PASSWORD",
+            "database": "DATABASE_NAME",
+            "charset": "DATABASE_CHARSET",
+        }
+        for config_key, env_key in env_map.items():
+            env_value = os.getenv(env_key)
+            if env_value not in (None, ""):
+                db_config[config_key] = env_value
+
+        env_port = os.getenv("DATABASE_PORT")
+        if env_port not in (None, ""):
+            try:
+                db_config["port"] = int(env_port)
+            except ValueError:
+                logger.warning("DATABASE_PORT 非法值: %s，已忽略并回退 config.yaml/default", env_port)
+
+        return db_config
     
     def _get_db_connection(self):
         """获取数据库连接"""
@@ -93,6 +196,17 @@ class AgentConfigLoader:
             if self.strict_mode:
                 raise DatabaseConnectionError(error_msg) from e
             raise
+
+    @staticmethod
+    def _build_ai_model_payload(result: Dict[str, Any]) -> Dict[str, Any]:
+        """统一构建Agent侧可用的AI模型配置字典。"""
+        return {
+            'model': result['model_name'],
+            'api_key': result['api_key'],
+            'api_base': result['api_base'],
+            'temperature': float(result['temperature']),
+            'max_tokens': result['max_tokens'],
+        }
     
     def get_default_ai_model_config(self) -> Optional[Dict[str, Any]]:
         """
@@ -109,23 +223,35 @@ class AgentConfigLoader:
                 SELECT model_name, provider, api_key, api_base, temperature, max_tokens
                 FROM ai_model_config
                 WHERE is_default = TRUE AND is_active = TRUE
+                ORDER BY updated_at DESC, id DESC
                 LIMIT 1
             """
             cursor.execute(sql)
             result = cursor.fetchone()
+
+            # 若当前没有默认模型，回退到最新启用模型，避免服务不可用
+            if not result:
+                fallback_sql = """
+                    SELECT model_name, provider, api_key, api_base, temperature, max_tokens
+                    FROM ai_model_config
+                    WHERE is_active = TRUE
+                    ORDER BY updated_at DESC, id DESC
+                    LIMIT 1
+                """
+                cursor.execute(fallback_sql)
+                result = cursor.fetchone()
+                if result:
+                    logger.warning(
+                        "⚠️ 未找到默认AI模型，已回退到最新启用模型: %s",
+                        result['model_name'],
+                    )
             
             cursor.close()
             conn.close()
             
             if result:
                 logger.info(f"成功从数据库加载AI模型配置: {result['model_name']}")
-                return {
-                    'model': result['model_name'],
-                    'api_key': result['api_key'],
-                    'api_base': result['api_base'],
-                    'temperature': float(result['temperature']),
-                    'max_tokens': result['max_tokens']
-                }
+                return self._build_ai_model_payload(result)
             else:
                 error_msg = "数据库中未找到默认AI模型配置"
                 logger.error(error_msg)
@@ -140,6 +266,79 @@ class AgentConfigLoader:
             if self.strict_mode:
                 raise ConfigLoadError(error_msg) from e
             return None
+
+    def get_ai_model_config_for_agent(self, agent_code: str) -> Optional[Dict[str, Any]]:
+        """
+        获取指定Agent模型配置：
+        1) 优先读取 system_config 中的 agent_model.<agent_code> 绑定
+        2) 无绑定或绑定无效时回退默认模型
+        """
+        conn = None
+        cursor = None
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+
+            config_key = f"agent_model.{agent_code}"
+            cursor.execute(
+                """
+                SELECT config_value
+                FROM system_config
+                WHERE config_key = %s AND is_active = TRUE
+                LIMIT 1
+                """,
+                (config_key,),
+            )
+            binding = cursor.fetchone()
+
+            bound_model_id: Optional[int] = None
+            if binding and binding.get("config_value") is not None:
+                raw_value = str(binding["config_value"]).strip()
+                if raw_value:
+                    try:
+                        bound_model_id = int(raw_value)
+                    except ValueError:
+                        logger.warning("Agent模型绑定值非法，将回退默认模型: %s=%s", config_key, raw_value)
+
+            if bound_model_id is not None:
+                cursor.execute(
+                    """
+                    SELECT model_name, provider, api_key, api_base, temperature, max_tokens
+                    FROM ai_model_config
+                    WHERE id = %s AND is_active = TRUE
+                    LIMIT 1
+                    """,
+                    (bound_model_id,),
+                )
+                model = cursor.fetchone()
+                if model:
+                    logger.info(
+                        "成功加载 %s 的专属模型配置: %s",
+                        agent_code,
+                        model["model_name"],
+                    )
+                    return self._build_ai_model_payload(model)
+
+                logger.warning(
+                    "Agent绑定模型不存在或未启用，将回退默认模型: agent=%s, model_id=%s",
+                    agent_code,
+                    bound_model_id,
+                )
+
+        except Exception as e:
+            logger.error(f"获取 {agent_code} 专属模型配置失败，将回退默认模型: {e}")
+            if self.strict_mode:
+                # 严格模式下依然优先尝试默认模型，避免因单个绑定异常导致服务直接不可用
+                pass
+        finally:
+            try:
+                if cursor:
+                    cursor.close()
+            finally:
+                if conn:
+                    conn.close()
+
+        return self.get_default_ai_model_config()
     
     def get_agent_config(self, agent_code: str) -> Optional[Dict[str, Any]]:
         """
@@ -284,7 +483,7 @@ class AgentConfigLoader:
     
     def get_agent_host_port(self, agent_name: str) -> tuple[str, int]:
         """
-        从 config.yaml 获取 Agent 的 host 和 port
+        获取 Agent 的 host 和 port（.env 优先，config.yaml 回退）
         
         Args:
             agent_name: Agent 名称 (如 'conductor', 'air_conditioner')
@@ -293,8 +492,33 @@ class AgentConfigLoader:
             (host, port) 元组
         """
         agent_cfg = self.agents_config.get(agent_name, {})
-        host = agent_cfg.get('host', 'localhost')
-        port = agent_cfg.get('port', 12000)
+        default_host = agent_cfg.get('host', 'localhost')
+        default_port = agent_cfg.get('port', 12000)
+
+        env_prefix = agent_name.upper().replace("-", "_")
+        host = (
+            os.getenv(f"AGENT_{env_prefix}_HOST")
+            or os.getenv("AGENT_HOST")
+            or default_host
+        )
+
+        raw_port = (
+            os.getenv(f"AGENT_{env_prefix}_PORT")
+            or os.getenv("AGENT_PORT")
+        )
+        if raw_port not in (None, ""):
+            try:
+                port = int(raw_port)
+            except ValueError:
+                logger.warning(
+                    "Agent端口环境变量非法，已回退默认端口: agent=%s, value=%s",
+                    agent_name,
+                    raw_port,
+                )
+                port = int(default_port)
+        else:
+            port = int(default_port)
+
         return host, port
     
     def get_backend_config_value(self, key: str, default: Any = None) -> Any:

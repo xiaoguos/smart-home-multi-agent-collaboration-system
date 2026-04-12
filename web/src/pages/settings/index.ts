@@ -4,3 +4,4 @@ export { default as AgentConnections } from "./agent/AgentConnections";
 export { default as AgentPrompts } from "./agent/AgentPrompts";
 export { default as LocalDeviceSettings } from "./device/LocalDeviceSettings";
 export { default as MihomeDeviceSettings } from "./device/MihomeDeviceSettings";
+export { default as PluginMenuSettings } from "./plugin/PluginMenuSettings";

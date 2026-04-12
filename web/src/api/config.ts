@@ -27,11 +27,19 @@ export interface Agent {
   port: number;
   description?: string;
   is_enabled: boolean;
+  model_id?: number | null;
+  model_name?: string | null;
 }
 
 export interface AgentPrompt {
   agent_code: string;
   prompt_text: string;
+}
+
+export interface AgentModelBinding {
+  agent_code: string;
+  model_id?: number | null;
+  model_name?: string | null;
 }
 
 export interface Device {
@@ -103,7 +111,7 @@ export async function getAgent(agentCode: string): Promise<Agent> {
 
 export async function updateAgent(
   agentId: number,
-  data: Partial<Omit<Agent, 'id' | 'agent_code'>>
+  data: Partial<Omit<Agent, 'id' | 'agent_code' | 'model_id' | 'model_name'>>
 ): Promise<{ message: string; agent_id: number }> {
   return await httpClient.put(`/api/v1/config/agents/${agentId}`, data);
 }
@@ -120,6 +128,19 @@ export async function updateAgentPrompt(
   return await httpClient.put(`/api/v1/config/agents/${agentCode}/prompt`, {
     prompt_text: promptText,
     version: version || 'v1.0',
+  });
+}
+
+export async function getAgentModelBinding(agentCode: string): Promise<AgentModelBinding> {
+  return await httpClient.get(`/api/v1/config/agents/${agentCode}/model-binding`);
+}
+
+export async function updateAgentModelBinding(
+  agentCode: string,
+  modelId?: number | null,
+): Promise<{ message: string; agent_code: string }> {
+  return await httpClient.put(`/api/v1/config/agents/${agentCode}/model-binding`, {
+    model_id: modelId ?? null,
   });
 }
 

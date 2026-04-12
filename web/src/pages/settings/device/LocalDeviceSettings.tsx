@@ -114,8 +114,8 @@ const LocalDeviceSettings: React.FC = () => {
   return (
     <>
       <div className="setting-section">
-        <h2 className="setting-page-title">本地设备</h2>
-        <p className="setting-page-desc">维护与 Agent 关联的本地设备清单（数据库中的 device_config）</p>
+        <h2 className="setting-page-title">自定义设备</h2>
+        <p className="setting-page-desc">维护与 Agent 关联的自定义设备清单（数据库中的 device_config）</p>
       </div>
       <Space style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

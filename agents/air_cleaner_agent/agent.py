@@ -77,30 +77,18 @@ class AirPurifierAgent:
     def __init__(self):
         # 从数据库加载配置（严格模式：配置加载失败则退出）
         try:
-            config_loader = get_config_loader(strict_mode=True)
-            
-            # 加载AI模型配置
-            ai_config = config_loader.get_default_ai_model_config()
-            self.model = ChatOpenAI(
-                model=ai_config['model'],
-                api_key=ai_config['api_key'],
-                base_url=ai_config['api_base'],
-                temperature=ai_config['temperature'],
-            )
-            
-            # 加载系统提示词，并附加 A2A Skills 说明供模型对齐 skill id 与工具
-            system_prompt = config_loader.get_agent_prompt('air_cleaner')
-            base = system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
-            self.SYSTEM_PROMPT = base + "\n\n" + format_skills_for_llm()
-            
+            self.config_loader = get_config_loader(strict_mode=True)
         except Exception as e:
             logger.error(f"❌ 配置加载失败: {e}")
             logger.error("⚠️  请确保:")
             logger.error("   1. StarRocks 数据库已启动")
             logger.error("   2. 已执行数据库初始化脚本: data/init_config.sql 和 data/ai_config.sql")
-            logger.error("   3. config.yaml 中的数据库连接配置正确")
+            logger.error("   3. .env 或 config.yaml 中的数据库连接配置正确")
             raise SystemExit(1) from e
         
+        self._model_signature: tuple[str, str, str, float] | None = None
+        self._prompt_signature: str | None = None
+
         self.tools = [
             get_purifier_status,
             set_purifier_power,
@@ -111,12 +99,51 @@ class AirPurifierAgent:
             set_purifier_child_lock
         ]
 
+        # 启动时初始化一次；后续每次 invoke 前会按数据库配置热更新
+        self._refresh_runtime_config(force=True)
+
+    def _build_system_prompt(self) -> str:
+        # 加载系统提示词，并附加 A2A Skills 说明供模型对齐 skill id 与工具
+        try:
+            system_prompt = self.config_loader.get_agent_prompt('air_cleaner')
+        except Exception:
+            system_prompt = None
+        base = system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
+        return base + "\n\n" + format_skills_for_llm()
+
+    def _refresh_runtime_config(self, force: bool = False) -> None:
+        ai_config = self.config_loader.get_ai_model_config_for_agent("air_cleaner")
+        model_signature = (
+            str(ai_config['model']),
+            str(ai_config['api_key']),
+            str(ai_config['api_base']),
+            float(ai_config['temperature']),
+        )
+        prompt = self._build_system_prompt()
+
+        if (
+            not force
+            and self._model_signature == model_signature
+            and self._prompt_signature == prompt
+        ):
+            return
+
+        self.model = ChatOpenAI(
+            model=ai_config['model'],
+            api_key=ai_config['api_key'],
+            base_url=ai_config['api_base'],
+            temperature=ai_config['temperature'],
+        )
+        self.SYSTEM_PROMPT = prompt
         self.graph = create_react_agent(
             self.model,
             tools=self.tools,
             checkpointer=memory,
             prompt=self.SYSTEM_PROMPT,
         )
+        self._model_signature = model_signature
+        self._prompt_signature = prompt
+        logger.info("♻️ Air Cleaner Agent 已应用最新模型配置: %s", ai_config['model'])
 
     async def invoke(
         self,
@@ -125,6 +152,11 @@ class AirPurifierAgent:
         skill_id: str | None = None,
     ) -> dict[str, Any]:
         """非流式调用，直接返回最终结果。skill_id 来自 A2A 请求 metadata，用于强调当前技能上下文。"""
+        try:
+            self._refresh_runtime_config()
+        except Exception as e:
+            logger.warning("动态刷新 Air Cleaner 模型配置失败，继续使用当前配置: %s", e)
+
         user_text = user_message_skill_prefix(skill_id) + query
         inputs = {'messages': [('user', user_text)]}
         config = {'configurable': {'thread_id': context_id}}

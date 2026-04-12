@@ -5,10 +5,6 @@ import {
   CloseCircleOutlined,
   LinkOutlined,
   ExclamationCircleOutlined,
-  HomeOutlined,
-  CheckSquareOutlined,
-  RocketOutlined,
-  CloudOutlined,
   RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -16,14 +12,14 @@ import { checkXiaomiBindingStatus, unbindXiaomiAccount, type BindingStatus } fro
 import { checkDidaBindingStatus, unbindDidaAccount, type DidaBindingStatusResponse } from "../../api/dida";
 import type { UserInfo } from "../../api/auth";
 import { getClawSettings, setClawSettings, isValidEmbedUrl } from "../../utils/clawSettings";
+import { ACCOUNT_SETTING_PLUGINS, type ConfigPluginKey } from "./pluginRegistry";
+import "./account-setting.sass";
 
 const { Text, Paragraph } = Typography;
 
 export interface BindingSectionProps {
   userInfo: UserInfo | null;
 }
-
-type ConfigKey = "xiaomi" | "dida" | "openclaw" | "zeroclaw";
 
 const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
   const navigate = useNavigate();
@@ -33,7 +29,7 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
   const [didaLoading, setDidaLoading] = useState(false);
   const [bindingStatus, setBindingStatus] = useState<BindingStatus | null>(null);
   const [didaBindingStatus, setDidaBindingStatus] = useState<DidaBindingStatusResponse | null>(null);
-  const [activeConfig, setActiveConfig] = useState<ConfigKey | null>(null);
+  const [activeConfig, setActiveConfig] = useState<ConfigPluginKey | null>(null);
   const [clawSettingsVersion, setClawSettingsVersion] = useState(0);
 
   useEffect(() => {
@@ -177,13 +173,6 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     const z = String(getClawSettings(userInfo.id).zeroclawUrl ?? "").trim();
     return z.length > 0 && isValidEmbedUrl(z);
   }, [userInfo?.id, clawSettingsVersion]);
-
-  const drawerTitles: Record<ConfigKey, string> = {
-    xiaomi: "小米账号",
-    dida: "滴答清单",
-    openclaw: "OpenClaw 嵌入",
-    zeroclaw: "ZeroClaw 嵌入",
-  };
 
   const renderXiaomiDetail = () => (
     <Spin spinning={xiaomiLoading}>
@@ -373,101 +362,132 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     </>
   );
 
-  const catalogItems: {
-    key: ConfigKey;
-    title: string;
-    blurb: string;
-    icon: React.ReactNode;
-    bound: boolean;
-    loading: boolean;
-  }[] = [
-    {
-      key: "xiaomi",
-      title: "小米账号",
-      blurb: "智能家居与设备联动，语音与场景控制",
-      icon: <HomeOutlined />,
-      bound: Boolean(bindingStatus?.is_bound),
-      loading: xiaomiLoading,
-    },
-    {
-      key: "dida",
-      title: "滴答清单",
-      blurb: "待办与任务同步，像清单插件一样接入助手",
-      icon: <CheckSquareOutlined />,
-      bound: Boolean(didaBindingStatus?.is_bound),
-      loading: didaLoading,
-    },
-    {
-      key: "openclaw",
-      title: "OpenClaw",
-      blurb: "OpenClaw 页面嵌入侧边栏，与 ZeroClaw 分开配置",
-      icon: <RocketOutlined />,
-      bound: openClawConfigured,
-      loading: false,
-    },
-    {
-      key: "zeroclaw",
-      title: "ZeroClaw",
-      blurb: "ZeroClaw 页面嵌入侧边栏，与 OpenClaw 分开配置",
-      icon: <CloudOutlined />,
-      bound: zeroClawConfigured,
-      loading: false,
-    },
-  ];
+  const pluginStatusMap = useMemo<Record<ConfigPluginKey, { bound: boolean; loading: boolean }>>(
+    () => ({
+      xiaomi: { bound: Boolean(bindingStatus?.is_bound), loading: xiaomiLoading },
+      dida: { bound: Boolean(didaBindingStatus?.is_bound), loading: didaLoading },
+      openclaw: { bound: openClawConfigured, loading: false },
+      zeroclaw: { bound: zeroClawConfigured, loading: false },
+    }),
+    [
+      bindingStatus?.is_bound,
+      didaBindingStatus?.is_bound,
+      didaLoading,
+      openClawConfigured,
+      xiaomiLoading,
+      zeroClawConfigured,
+    ],
+  );
+
+  const catalogItems = useMemo(
+    () =>
+      ACCOUNT_SETTING_PLUGINS.map((plugin) => ({
+        ...plugin,
+        ...pluginStatusMap[plugin.key],
+      })),
+    [pluginStatusMap],
+  );
+
+  const enabledItems = useMemo(() => catalogItems.filter((item) => item.bound), [catalogItems]);
+  const disabledItems = useMemo(() => catalogItems.filter((item) => !item.bound), [catalogItems]);
+
+  const activePlugin = activeConfig
+    ? ACCOUNT_SETTING_PLUGINS.find((plugin) => plugin.key === activeConfig) ?? null
+    : null;
+
+  const renderActiveConfigDetail = () => {
+    if (activeConfig === "xiaomi") return renderXiaomiDetail();
+    if (activeConfig === "dida") return renderDidaDetail();
+    if (activeConfig === "openclaw") return renderOpenClawDetail();
+    return renderZeroClawDetail();
+  };
+
+  const renderCatalogGroup = (
+    items: typeof catalogItems,
+    emptyText: string,
+  ) => {
+    if (items.length === 0) {
+      return (
+        <div className="plugin-section-empty">
+          <Text type="secondary">{emptyText}</Text>
+        </div>
+      );
+    }
+
+    return (
+      <Row gutter={[16, 16]}>
+        {items.map((item) => (
+          <Col xs={24} sm={12} lg={8} key={item.key}>
+            <button
+              type="button"
+              className="config-tile"
+              onClick={() => setActiveConfig(item.key)}
+              aria-label={`打开 ${item.title} 配置`}
+            >
+              <Spin spinning={item.loading}>
+                <div className="config-tile-inner">
+                  <div className="config-tile-icon">{item.icon}</div>
+                  <div className="config-tile-body">
+                    <div className="config-tile-title-row">
+                      <Text strong className="config-tile-title">
+                        {item.title}
+                      </Text>
+                      {item.bound ? (
+                        <Tag icon={<CheckCircleOutlined />} color="success" className="config-tile-tag">
+                          已开启
+                        </Tag>
+                      ) : (
+                        <Tag color="default" className="config-tile-tag">
+                          未开启
+                        </Tag>
+                      )}
+                    </div>
+                    <Paragraph
+                      type="secondary"
+                      className="config-tile-desc"
+                      ellipsis={{ rows: 2 }}
+                      style={{ marginBottom: 0 }}
+                    >
+                      {item.blurb}
+                    </Paragraph>
+                  </div>
+                  <RightOutlined className="config-tile-chevron" aria-hidden />
+                </div>
+              </Spin>
+            </button>
+          </Col>
+        ))}
+      </Row>
+    );
+  };
 
   return (
     <>
       <Card className="config-catalog-card" bordered={false}>
         <Paragraph type="secondary" className="config-catalog-intro">
-          以下为可启用的集成项，点击缩略块查看授权、账号与地址等详细设置（类似插件管理）。
+          以插件卡片展示配置入口，点击后可查看并修改该插件的具体配置。
         </Paragraph>
-        <Row gutter={[16, 16]}>
-          {catalogItems.map((item) => (
-            <Col xs={24} sm={12} lg={8} key={item.key}>
-              <button
-                type="button"
-                className="config-tile"
-                onClick={() => setActiveConfig(item.key)}
-                aria-label={`打开 ${item.title} 配置`}
-              >
-                <Spin spinning={item.loading}>
-                  <div className="config-tile-inner">
-                    <div className="config-tile-icon">{item.icon}</div>
-                    <div className="config-tile-body">
-                      <div className="config-tile-title-row">
-                        <Text strong className="config-tile-title">
-                          {item.title}
-                        </Text>
-                        {item.bound ? (
-                          <Tag icon={<CheckCircleOutlined />} color="success" className="config-tile-tag">
-                            已启用
-                          </Tag>
-                        ) : (
-                          <Tag color="default" className="config-tile-tag">
-                            未配置
-                          </Tag>
-                        )}
-                      </div>
-                      <Paragraph
-                        type="secondary"
-                        className="config-tile-desc"
-                        ellipsis={{ rows: 2 }}
-                        style={{ marginBottom: 0 }}
-                      >
-                        {item.blurb}
-                      </Paragraph>
-                    </div>
-                    <RightOutlined className="config-tile-chevron" aria-hidden />
-                  </div>
-                </Spin>
-              </button>
-            </Col>
-          ))}
-        </Row>
+        <div className="plugin-section">
+          <div className="plugin-section-title-row">
+            <Text strong>已开启插件</Text>
+            <Tag color="success">{enabledItems.length}</Tag>
+          </div>
+          {renderCatalogGroup(enabledItems, "当前没有已开启插件")}
+        </div>
+
+        <div className="plugin-section-divider" aria-hidden />
+
+        <div className="plugin-section">
+          <div className="plugin-section-title-row">
+            <Text strong>未开启插件</Text>
+            <Tag>{disabledItems.length}</Tag>
+          </div>
+          {renderCatalogGroup(disabledItems, "当前没有未开启插件")}
+        </div>
       </Card>
 
       <Drawer
-        title={activeConfig ? drawerTitles[activeConfig] : ""}
+        title={activePlugin?.title ?? ""}
         placement="right"
         width={Math.min(520, typeof window !== "undefined" ? window.innerWidth - 24 : 520)}
         open={activeConfig !== null}
@@ -475,10 +495,7 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
         destroyOnClose
         className="config-detail-drawer"
       >
-        {activeConfig === "xiaomi" && renderXiaomiDetail()}
-        {activeConfig === "dida" && renderDidaDetail()}
-        {activeConfig === "openclaw" && renderOpenClawDetail()}
-        {activeConfig === "zeroclaw" && renderZeroClawDetail()}
+        {activeConfig ? renderActiveConfigDetail() : null}
       </Drawer>
     </>
   );

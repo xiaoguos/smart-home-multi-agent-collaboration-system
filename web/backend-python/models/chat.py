@@ -6,13 +6,15 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="用户输入的消息")
     system_user_id: int = Field(..., description="系统用户ID（当前登录用户）")
     context_id: Optional[str] = Field(None, description="会话上下文ID")
+    agent_code: str = Field("conductor", description="目标Agent代码（仅支持启用状态的Agent）")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "查看所有可用代理",
                 "system_user_id": 1000000001,
-                "context_id": "session-1234567890"
+                "context_id": "session-1234567890",
+                "agent_code": "conductor",
             }
         }
 
@@ -22,6 +24,7 @@ class ChatResponse(BaseModel):
     context_id: str = Field(..., description="会话上下文ID")
     task_id: Optional[str] = Field(None, description="任务ID")
     status: str = Field(default="success", description="响应状态")
+    agent_code: str = Field(default="conductor", description="实际执行对话的Agent代码")
     
     class Config:
         json_schema_extra = {
@@ -29,7 +32,8 @@ class ChatResponse(BaseModel):
                 "content": "系统中共有 4 个可用代理...",
                 "context_id": "session-1234567890",
                 "task_id": "task-abc123",
-                "status": "success"
+                "status": "success",
+                "agent_code": "conductor",
             }
         }
 

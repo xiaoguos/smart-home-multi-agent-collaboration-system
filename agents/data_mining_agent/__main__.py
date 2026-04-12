@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option("--host", "host", default=None, help="服务主机地址（默认从config.yaml读取）")
-@click.option("--port", "port", default=None, type=int, help="服务端口（默认从config.yaml读取）")
+@click.option("--host", "host", default=None, help="服务主机地址（默认从 .env/config.yaml 读取）")
+@click.option("--port", "port", default=None, type=int, help="服务端口（默认从 .env/config.yaml 读取）")
 def main(host, port):
     """Starts the Data Mining Agent server."""
     try:

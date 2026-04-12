@@ -5,12 +5,18 @@ description = "Moss AI 智能家居总管理 Agent"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "a2a>=0.1.0",
     "click>=8.0.0",
     "uvicorn[standard]>=0.24.0",
     "httpx>=0.25.0",
     "PyYAML>=6.0.0",
     "starlette>=0.27.0",
+    "a2a-sdk[http-server]>=0.3.26",
+    "langchain-core>=1.2.28",
+    "langchain-openai>=1.1.12",
+    "langgraph>=1.1.6",
+    "pydantic>=2.12.5",
+    "pymysql>=1.1.2",
+    "requests>=2.33.1",
 ]
 
 [build-system]

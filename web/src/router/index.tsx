@@ -5,9 +5,9 @@ import {
   ConfigLayout,
   ModelSettings,
   AgentConnections,
-  AgentPrompts,
   LocalDeviceSettings,
   MihomeDeviceSettings,
+  PluginMenuSettings,
 } from "@/pages/settings";
 import Chat from "@/pages/chat";
 import About from "@/pages/about";
@@ -64,11 +64,11 @@ export const router = createBrowserRouter([
               },
               {
                 path: "setting",
-                loader: () => redirect("/models/llm"),
+                loader: () => redirect("/models"),
               },
               {
                 path: "setting/*",
-                loader: () => redirect("/models/llm"),
+                loader: () => redirect("/models"),
               },
               {
                 path: "models",
@@ -76,11 +76,11 @@ export const router = createBrowserRouter([
                 children: [
                   {
                     index: true,
-                    loader: () => redirect("/models/llm"),
+                    element: <ModelSettings />,
                   },
                   {
                     path: "llm",
-                    element: <ModelSettings />,
+                    loader: () => redirect("/models"),
                   },
                   {
                     path: "*",
@@ -94,15 +94,15 @@ export const router = createBrowserRouter([
                 children: [
                   {
                     index: true,
-                    loader: () => redirect("/agents/connections"),
-                  },
-                  {
-                    path: "connections",
                     element: <AgentConnections />,
                   },
                   {
+                    path: "connections",
+                    loader: () => redirect("/agents"),
+                  },
+                  {
                     path: "prompts",
-                    element: <AgentPrompts />,
+                    loader: () => redirect("/agents"),
                   },
                   {
                     path: "*",
@@ -125,6 +125,20 @@ export const router = createBrowserRouter([
                   {
                     path: "mihome",
                     element: <MihomeDeviceSettings />,
+                  },
+                  {
+                    path: "*",
+                    ...notFoundRoute,
+                  },
+                ],
+              },
+              {
+                path: "plugins",
+                element: <ConfigLayout />,
+                children: [
+                  {
+                    index: true,
+                    element: <PluginMenuSettings />,
                   },
                   {
                     path: "*",

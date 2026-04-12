@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   EditOutlined
 } from "@ant-design/icons";
-import { App, Button, Space, Alert, List, Typography, Drawer, Tooltip, Spin, Input, Modal } from "antd";
+import { App, Button, Space, Alert, List, Typography, Drawer, Tooltip, Spin, Input, Modal, Select, Tag } from "antd";
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Markdown from 'react-markdown';
@@ -17,6 +17,7 @@ import remarkGfm from 'remark-gfm';
 import "./chat.sass";
 import { sendChatMessage } from "../../api/chat";
 import { checkBindingStatus } from "../../api/xiaomi";
+import { getAgents, type Agent } from "../../api/config";
 import {
   getConversationList,
   getConversationHistory,
@@ -64,6 +65,11 @@ const Chat: React.FC = () => {
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>("");
   const [isTemporaryConversation, setIsTemporaryConversation] = useState<boolean>(false); // 标记是否为临时对话
+  const [enabledAgents, setEnabledAgents] = useState<Agent[]>([]);
+  const [selectedAgentCode, setSelectedAgentCode] = useState<string>("conductor");
+  const [conversationAgentMap, setConversationAgentMap] = useState<Record<string, string>>({});
+  const [createConversationModalOpen, setCreateConversationModalOpen] = useState<boolean>(false);
+  const [newConversationAgentCode, setNewConversationAgentCode] = useState<string>("");
 
   // 滚动到底部
   const scrollToBottom = () => {
@@ -95,15 +101,122 @@ const Chat: React.FC = () => {
     }
   };
 
+  const getAgentName = (agentCode?: string): string => {
+    if (!agentCode) {
+      return "未选择";
+    }
+    const matched = enabledAgents.find((agent) => agent.agent_code === agentCode);
+    return matched?.agent_name || agentCode;
+  };
+
+  const isEnabledAgentCode = (agentCode?: string): agentCode is string => {
+    if (!agentCode) {
+      return false;
+    }
+    return enabledAgents.some((agent) => agent.agent_code === agentCode);
+  };
+
+  const getDefaultAgentCode = (): string => {
+    if (isEnabledAgentCode(selectedAgentCode)) {
+      return selectedAgentCode;
+    }
+    const preferred = enabledAgents.find((agent) => agent.agent_code === "conductor");
+    return preferred?.agent_code || enabledAgents[0]?.agent_code || "";
+  };
+
+  const getConversationAgentCode = (conversation?: Conversation | null): string => {
+    if (!conversation) {
+      return selectedAgentCode;
+    }
+    return conversationAgentMap[conversation.context_id] || selectedAgentCode;
+  };
+
+  const hydrateConversationAgentMap = async (
+    conversationList: Conversation[],
+    userId: number,
+  ): Promise<void> => {
+    const missingContextIds = conversationList
+      .map((conversation) => conversation.context_id)
+      .filter((context) => !conversationAgentMap[context]);
+
+    if (!missingContextIds.length) {
+      return;
+    }
+
+    const agentResults = await Promise.allSettled(
+      missingContextIds.map(async (context) => {
+        const historyResponse = await getConversationHistory(context, {
+          system_user_id: userId,
+          limit: 1,
+        });
+        const latestMessage = historyResponse.data?.[0];
+        const latestAgentCode = latestMessage?.metadata?.agent_code;
+        if (typeof latestAgentCode !== "string" || !latestAgentCode.trim()) {
+          return null;
+        }
+        return {
+          context,
+          agentCode: latestAgentCode.trim(),
+        };
+      }),
+    );
+
+    const nextMap: Record<string, string> = {};
+    agentResults.forEach((result) => {
+      if (result.status === "fulfilled" && result.value) {
+        nextMap[result.value.context] = result.value.agentCode;
+      }
+    });
+
+    if (Object.keys(nextMap).length > 0) {
+      setConversationAgentMap((prev) => ({
+        ...prev,
+        ...nextMap,
+      }));
+    }
+  };
+
+  const loadEnabledAgents = async () => {
+    try {
+      const agents = await getAgents(true);
+      setEnabledAgents(agents);
+
+      if (!agents.length) {
+        setSelectedAgentCode("");
+        setNewConversationAgentCode("");
+        return;
+      }
+
+      const hasCurrentSelected = agents.some((agent) => agent.agent_code === selectedAgentCode);
+      const hasNewConversationSelected = agents.some(
+        (agent) => agent.agent_code === newConversationAgentCode,
+      );
+      const preferred = agents.find((agent) => agent.agent_code === "conductor");
+      const fallbackAgentCode = preferred?.agent_code || agents[0].agent_code;
+      if (!hasCurrentSelected) {
+        setSelectedAgentCode(fallbackAgentCode);
+      }
+      if (!hasNewConversationSelected) {
+        setNewConversationAgentCode(fallbackAgentCode);
+      }
+    } catch (error) {
+      console.error("加载可用Agent失败:", error);
+      setEnabledAgents([]);
+      setSelectedAgentCode("");
+      setNewConversationAgentCode("");
+      message.error("加载可用Agent失败");
+    }
+  };
+
   // 加载对话列表
-  const loadConversations = async (autoSelectFirst: boolean = false) => {
+  const loadConversations = async (autoSelectFirst: boolean = false): Promise<Conversation[]> => {
     try {
       setConversationsLoading(true);
       const userId = getUserId();
       
       if (!userId) {
         message.warning("未找到用户信息");
-        return;
+        return [];
       }
       
       const response = await getConversationList({
@@ -112,40 +225,56 @@ const Chat: React.FC = () => {
         only_active: true
       });
       
-      // 直接设置对话列表，不做其他操作
-      setConversations(response.data);
+      const latestConversations = response.data || [];
+      setConversations(latestConversations);
+      void hydrateConversationAgentMap(latestConversations, userId);
       
       // 只在明确要求时才自动选择第一个
-      if (autoSelectFirst && response.data.length > 0 && !currentConversation) {
-        await switchConversation(response.data[0]);
+      if (autoSelectFirst && latestConversations.length > 0 && !currentConversation) {
+        await switchConversation(latestConversations[0]);
       }
+      return latestConversations;
     } catch (error) {
       console.error("加载对话列表失败:", error);
       message.error("加载对话列表失败");
+      return [];
     } finally {
       setConversationsLoading(false);
     }
   };
   
   // 创建新对话（清空当前对话，准备开始新的对话）
-  const createTemporaryConversation = () => {
+  const createTemporaryConversation = (agentCode?: string) => {
     // 清空 context_id，下次发送消息时后端会创建新对话
     contextId.current = "";
     setIsTemporaryConversation(true);
     setMessages([]); // 清空消息
     setCurrentConversation(null); // 清空当前对话
+    if (agentCode) {
+      setSelectedAgentCode(agentCode);
+    }
+  };
+
+  const openCreateConversationModal = () => {
+    if (!enabledAgents.length) {
+      message.warning("当前没有可用Agent，请先在配置页启用Agent");
+      return;
+    }
+    setNewConversationAgentCode(getDefaultAgentCode());
+    setCreateConversationModalOpen(true);
   };
 
   // 创建新对话（临时的，不存数据库）
-  const handleCreateConversation = async () => {
-    try {
-      // 创建临时对话
-      createTemporaryConversation();
-      message.success("创建新对话");
-    } catch (error) {
-      console.error("创建对话失败:", error);
-      message.error("创建对话失败");
+  const handleCreateConversation = () => {
+    const targetAgentCode = newConversationAgentCode || getDefaultAgentCode();
+    if (!isEnabledAgentCode(targetAgentCode)) {
+      message.warning("请选择可用的Agent后再新建对话");
+      return;
     }
+
+    createTemporaryConversation(targetAgentCode);
+    setCreateConversationModalOpen(false);
+    message.success(`创建新对话，当前Agent：${getAgentName(targetAgentCode)}`);
   };
 
   // 切换对话
@@ -178,6 +307,13 @@ const Chat: React.FC = () => {
       setCurrentConversation(updatedConversation || conversation);
       contextId.current = targetContextId;
       setIsTemporaryConversation(false);
+
+      const rememberedAgentCode = conversationAgentMap[targetContextId];
+      if (isEnabledAgentCode(rememberedAgentCode)) {
+        setSelectedAgentCode(rememberedAgentCode);
+      } else {
+        setSelectedAgentCode(getDefaultAgentCode());
+      }
       
       // 2. 加载对话的历史消息
       const historyResponse = await getConversationHistory(targetContextId, {
@@ -198,6 +334,21 @@ const Chat: React.FC = () => {
           }));
         
         setMessages(historyMessages);
+
+        const latestWithAgent = [...historyResponse.data]
+          .reverse()
+          .find((msg: ChatMessage) => Boolean(msg.metadata?.agent_code));
+        const latestAgentCode = latestWithAgent?.metadata?.agent_code;
+        if (typeof latestAgentCode === "string" && latestAgentCode.trim()) {
+          const normalizedLatestAgentCode = latestAgentCode.trim();
+          setConversationAgentMap((prev) => ({
+            ...prev,
+            [targetContextId]: normalizedLatestAgentCode,
+          }));
+          if (isEnabledAgentCode(normalizedLatestAgentCode)) {
+            setSelectedAgentCode(normalizedLatestAgentCode);
+          }
+        }
       } else {
         setMessages([]);
       }
@@ -230,7 +381,7 @@ const Chat: React.FC = () => {
           
           // 如果删除的是当前对话，创建新对话
           if (currentConversation?.context_id === conversation.context_id) {
-            handleCreateConversation();
+            createTemporaryConversation(getDefaultAgentCode());
           }
           
           // 刷新对话列表
@@ -289,35 +440,33 @@ const Chat: React.FC = () => {
     checkBinding();
   }, []);
 
+  // 加载可用Agent（仅启用状态）
+  useEffect(() => {
+    void loadEnabledAgents();
+  }, []);
+
   // 初始化时加载对话列表，选择最近的对话或创建新对话
   useEffect(() => {
     const initConversations = async () => {
       const userId = getUserId();
       
       if (!userId) {
-        createTemporaryConversation();
+        createTemporaryConversation(getDefaultAgentCode());
         return;
       }
       
       try {
-        const response = await getConversationList({
-          system_user_id: userId,
-          limit: 50,
-          only_active: true
-        });
-        
-        setConversations(response.data);
-        
-        if (response.data.length > 0) {
+        const latestConversations = await loadConversations(false);
+        if (latestConversations.length > 0) {
           // 有对话记录，选择最近的一个（第一个）
-          const latestConversation = response.data[0];
+          const latestConversation = latestConversations[0];
           await switchConversation(latestConversation);
         } else {
           // 没有对话记录，创建临时对话
-          createTemporaryConversation();
+          createTemporaryConversation(getDefaultAgentCode());
         }
       } catch {
-        createTemporaryConversation();
+        createTemporaryConversation(getDefaultAgentCode());
       }
     };
     
@@ -347,6 +496,17 @@ const Chat: React.FC = () => {
   // 发送消息
   const sendMessage = async (userMessage: string) => {
     try {
+      const activeAgentCode = selectedAgentCode.trim();
+      if (!activeAgentCode) {
+        message.warning("当前没有可用Agent，请先在配置页启用Agent");
+        return;
+      }
+      if (!enabledAgents.some((agent) => agent.agent_code === activeAgentCode)) {
+        message.warning("所选Agent不可用，正在刷新可用列表");
+        await loadEnabledAgents();
+        return;
+      }
+
       setLoading(true);
       
       // 创建 AbortController 用于取消请求
@@ -371,13 +531,22 @@ const Chat: React.FC = () => {
       const response = await sendChatMessage(
         userMessage, 
         systemUserId, 
-        contextId.current, 
+        contextId.current,
+        activeAgentCode,
         abortControllerRef.current.signal
       );
       const content = response.content;
+      const responseAgentCode = response.agent_code?.trim() || activeAgentCode;
       // 更新 context_id（如果后端返回了新的）
       if (response.context_id) {
         contextId.current = response.context_id;
+        setConversationAgentMap((prev) => ({
+          ...prev,
+          [response.context_id]: responseAgentCode,
+        }));
+        if (isEnabledAgentCode(responseAgentCode)) {
+          setSelectedAgentCode(responseAgentCode);
+        }
         
         // 如果是临时对话，发送第一条消息后转为正式对话
         if (isTemporaryConversation) {
@@ -386,16 +555,13 @@ const Chat: React.FC = () => {
           
           // 延迟500ms后重新加载对话列表，确保后端已经创建了对话记录
           setTimeout(async () => {
-            await loadConversations(false);
-            
-            // 从新加载的列表中找到这个对话并更新当前对话
-            setConversations(prev => {
-              const newConv = prev.find(c => c.context_id === newContextId);
-              if (newConv) {
-                setCurrentConversation(newConv);
-              }
-              return prev;
-            });
+            const latestConversations = await loadConversations(false);
+            const newConversation = latestConversations.find(
+              (conversation) => conversation.context_id === newContextId,
+            );
+            if (newConversation) {
+              setCurrentConversation(newConversation);
+            }
           }, 500);
         }
       }
@@ -470,12 +636,18 @@ const Chat: React.FC = () => {
     return content;
   };
 
+  const currentConversationAgentCode = getConversationAgentCode(currentConversation);
+  const currentConversationAgentName = getAgentName(currentConversationAgentCode);
+
   // 构建气泡列表数据
   const bubbleItems = [
     {
       key: "welcome",
       role: "ai",
-      content: renderMessageContent("您好！我是 Moss AI 智能家居助手，可以帮您控制和管理所有智能设备。", "ai"),
+      content: renderMessageContent(
+        `您好！当前正在与 ${currentConversationAgentName} 对话，我可以帮您控制和管理智能设备。`,
+        "ai",
+      ),
     },
     ...messages.map((msg, index) => {
       const item: any = {
@@ -547,7 +719,7 @@ const Chat: React.FC = () => {
             <Button
               type="text"
               icon={<PlusOutlined />}
-              onClick={handleCreateConversation}
+              onClick={openCreateConversationModal}
             />
           </Tooltip>
         }
@@ -609,6 +781,11 @@ const Chat: React.FC = () => {
                   }
                   description={
                     <div>
+                      {conversationAgentMap[conv.context_id] && (
+                        <Tag color="blue" style={{ marginBottom: 6 }}>
+                          {getAgentName(conversationAgentMap[conv.context_id])}
+                        </Tag>
+                      )}
                       <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
                         {conv.last_message || '暂无消息'}
                       </Text>
@@ -625,22 +802,51 @@ const Chat: React.FC = () => {
         </Spin>
       </Drawer>
 
+      <Modal
+        title="新建对话"
+        open={createConversationModalOpen}
+        onOk={handleCreateConversation}
+        onCancel={() => setCreateConversationModalOpen(false)}
+        okText="开始对话"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Text type="secondary">请选择这个新对话要使用的 Agent</Text>
+          <Select
+            value={newConversationAgentCode || undefined}
+            onChange={(code) => setNewConversationAgentCode(code)}
+            options={enabledAgents.map((agent) => ({
+              value: agent.agent_code,
+              label: `${agent.agent_name} (${agent.agent_code})`,
+            }))}
+            placeholder="选择Agent"
+            style={{ width: "100%" }}
+          />
+        </Space>
+      </Modal>
+
       {/* 主聊天区域 */}
       <div className="chat-main">
         {/* 当前对话标题栏 */}
-        {currentConversation && (
-          <div className="chat-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MessageOutlined style={{ color: '#1890ff' }} />
-              <Text strong style={{ fontSize: 16 }}>
-                {currentConversation.title}
-              </Text>
-            </div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {currentConversation.message_count} 条消息
+        <div className="chat-header">
+          <div className="chat-header-left">
+            <MessageOutlined style={{ color: '#1890ff' }} />
+            <Text strong style={{ fontSize: 16 }}>
+              {currentConversation?.title || "新对话"}
             </Text>
           </div>
-        )}
+
+          <div className="chat-header-center">
+            <Tag color="blue">当前Agent：{currentConversationAgentName}</Tag>
+          </div>
+
+          <div className="chat-header-right">
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {currentConversation ? `${currentConversation.message_count} 条消息` : "临时会话"}
+            </Text>
+          </div>
+        </div>
         
         {/* 小米账号绑定提示 */}
         {!checkingBinding && !isBound && (
@@ -656,6 +862,17 @@ const Chat: React.FC = () => {
                 </Button>
               }
               closable
+            />
+          </div>
+        )}
+
+        {enabledAgents.length === 0 && (
+          <div style={{ padding: "16px 16px 0", flexShrink: 0 }}>
+            <Alert
+              message="当前没有可用Agent"
+              description="请前往设置页启用至少一个Agent后再发起对话。"
+              type="warning"
+              showIcon
             />
           </div>
         )}
@@ -698,6 +915,10 @@ const Chat: React.FC = () => {
                 message.warning("请输入消息内容！");
                 return;
               }
+              if (!selectedAgentCode) {
+                message.warning("请先选择可用Agent");
+                return;
+              }
               const userMessage = value;
               setValue("");
               sendMessage(userMessage);
@@ -709,7 +930,7 @@ const Chat: React.FC = () => {
               setLoading(false);
             }}
             autoSize={{ minRows: 2, maxRows: 6 }}
-            placeholder="输入您的消息..."
+            placeholder={selectedAgentCode ? `发消息给 ${getAgentName(selectedAgentCode)}...` : "请先启用并选择Agent"}
           />
         </div>
       </div>

@@ -1,23 +1,73 @@
 import logging
 import httpx
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from uuid import uuid4
+from urllib.parse import urlparse
 
 from models.chat import A2ARequest, A2AMessage, A2AMessagePart
 import env
+from database import query
 from services.chat_history_service import chat_history_service
 
 logger = logging.getLogger(__name__)
 
 
 class ConductorService:
-    """Conductor Agent 通信服务"""
+    """A2A Agent 通信服务（兼容历史命名）"""
     
     def __init__(self):
         self.base_url = env.CONDUCTOR_AGENT_URL
         self.timeout = env.CONDUCTOR_TIMEOUT
         self._request_id_counter = 1
+
+    @staticmethod
+    def _normalize_agent_code(agent_code: Optional[str]) -> str:
+        code = (agent_code or "conductor").strip()
+        return code or "conductor"
+
+    def _resolve_agent_endpoint(self, agent_code: str) -> tuple[str, str]:
+        """
+        根据 agent_config 动态解析 Agent 地址，并校验是否启用。
+
+        Returns:
+            tuple(base_url, agent_name)
+        """
+        code = self._normalize_agent_code(agent_code)
+        sql = """
+            SELECT agent_code, agent_name, host, port, is_enabled
+            FROM agent_config
+            WHERE agent_code = %s
+            LIMIT 1
+        """
+        rows = query(sql, (code,))
+
+        # 兼容旧配置：如果数据库暂时没有 conductor，则回退到环境变量配置
+        if not rows:
+            if code == "conductor":
+                return self.base_url.rstrip("/"), "Conductor Agent"
+            raise ValueError(f"未找到Agent配置: {code}")
+
+        item = rows[0]
+        enabled = bool(item.get("is_enabled", False))
+        if not enabled:
+            raise ValueError(f"Agent已被禁用，无法对话: {code}")
+
+        host = str(item.get("host") or "localhost").strip()
+        port = item.get("port")
+        agent_name = str(item.get("agent_name") or code)
+
+        if host.startswith("http://") or host.startswith("https://"):
+            base_url = host.rstrip("/")
+            parsed = urlparse(base_url)
+            if port and parsed.port is None:
+                base_url = f"{base_url}:{port}"
+        else:
+            if not port:
+                raise ValueError(f"Agent端口未配置: {code}")
+            base_url = f"http://{host}:{port}"
+
+        return base_url.rstrip("/"), agent_name
     
     def _generate_message_id(self) -> str:
         """生成消息 ID"""
@@ -152,9 +202,15 @@ class ConductorService:
             logger.error(f"提取响应内容失败: {e}", exc_info=True)
             return f"处理响应时出错: {str(e)}", "error", True
     
-    async def send_message(self, user_message: str, system_user_id: int, context_id: str) -> Dict[str, Any]:
+    async def send_message(
+        self,
+        user_message: str,
+        system_user_id: int,
+        context_id: str,
+        agent_code: str = "conductor",
+    ) -> Dict[str, Any]:
         """
-        发送消息到 Conductor Agent
+        发送消息到指定 Agent
         
         Args:
             user_message: 用户消息
@@ -164,26 +220,44 @@ class ConductorService:
         Returns:
             包含响应内容的字典
         """
+        normalized_agent_code = self._normalize_agent_code(agent_code)
+        target_base_url, target_agent_name = self._resolve_agent_endpoint(normalized_agent_code)
+        metadata = {
+            "agent_code": normalized_agent_code,
+            "agent_name": target_agent_name,
+        }
+
         # 先保存用户消息到数据库（保存原始用户消息，不带系统前缀）
         await chat_history_service.save_message(
             system_user_id=system_user_id,
             context_id=context_id,
             role="user",
             content=user_message,
-            status="success"
+            status="success",
+            metadata=metadata,
         )
-        logger.info(f"💾 已保存用户消息: context={context_id}, content={user_message[:50]}...")
+        logger.info(
+            "💾 已保存用户消息: context=%s, agent=%s, content=%s...",
+            context_id,
+            normalized_agent_code,
+            user_message[:50],
+        )
         
         try:
             # 构建请求（注入用户ID）
             request_data = self._build_a2a_request(user_message, system_user_id, context_id)
             
-            logger.info(f"📤 发送消息到 Conductor Agent: {user_message[:50]}...")
+            logger.info(
+                "📤 发送消息到 %s(%s): %s...",
+                target_agent_name,
+                normalized_agent_code,
+                user_message[:50],
+            )
             
             # 发送请求
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    f"{self.base_url}/",
+                    f"{target_base_url}/",
                     json=request_data,
                     headers={"Content-Type": "application/json"}
                 )
@@ -191,7 +265,7 @@ class ConductorService:
                 response.raise_for_status()
                 response_data = response.json()
             
-            logger.info(f"📥 收到 Conductor Agent 响应")
+            logger.info("📥 收到 %s 响应", target_agent_name)
             
             # 递增请求ID
             self._request_id_counter += 1
@@ -215,9 +289,15 @@ class ConductorService:
                 content=content,
                 task_id=task_id,
                 status=msg_status,
-                error_message=content if is_error else None
+                error_message=content if is_error else None,
+                metadata=metadata,
             )
-            logger.info(f"💾 已保存Agent回复: context={response_context_id}, content={content[:50]}...")
+            logger.info(
+                "💾 已保存Agent回复: context=%s, agent=%s, content=%s...",
+                response_context_id,
+                normalized_agent_code,
+                content[:50],
+            )
             
             # 如果是错误，返回错误状态
             if is_error:
@@ -225,18 +305,20 @@ class ConductorService:
                     "content": content,
                     "context_id": response_context_id,
                     "task_id": task_id,
-                    "status": msg_status  # failed 或 error
+                    "status": msg_status,  # failed 或 error
+                    "agent_code": normalized_agent_code,
                 }
             
             return {
                 "content": content,
                 "context_id": response_context_id,
                 "task_id": task_id,
-                "status": "success"
+                "status": "success",
+                "agent_code": normalized_agent_code,
             }
             
         except httpx.TimeoutException as e:
-            error_msg = "⏱️ 请求超时，Agent 可能正在处理复杂任务"
+            error_msg = f"⏱️ 请求超时，{target_agent_name} 可能正在处理复杂任务"
             logger.error(error_msg)
             
             # 保存错误消息到数据库
@@ -246,13 +328,14 @@ class ConductorService:
                 role="system",
                 content=error_msg,
                 status="error",
-                error_message=str(e)
+                error_message=str(e),
+                metadata=metadata,
             )
             
             raise Exception(error_msg)
         
         except httpx.ConnectError as e:
-            error_msg = f"🔌 无法连接到 Conductor Agent，请确保服务已启动 ({self.base_url})"
+            error_msg = f"🔌 无法连接到 {target_agent_name}，请确保服务已启动 ({target_base_url})"
             logger.error(error_msg)
             
             # 保存错误消息到数据库
@@ -262,13 +345,14 @@ class ConductorService:
                 role="system",
                 content=error_msg,
                 status="error",
-                error_message=str(e)
+                error_message=str(e),
+                metadata=metadata,
             )
             
             raise Exception(error_msg)
         
         except httpx.HTTPStatusError as e:
-            error_msg = f"❌ Agent 返回错误: {e.response.status_code}"
+            error_msg = f"❌ {target_agent_name} 返回错误: {e.response.status_code}"
             logger.error(error_msg)
             
             # 保存错误消息到数据库
@@ -278,11 +362,16 @@ class ConductorService:
                 role="system",
                 content=error_msg,
                 status="error",
-                error_message=str(e)
+                error_message=str(e),
+                metadata=metadata,
             )
             
             raise Exception(error_msg)
-        
+
+        except ValueError:
+            # 由上层 API 统一映射为 400 错误
+            raise
+
         except Exception as e:
             error_msg = f"💥 发送消息失败: {str(e)}"
             logger.error(error_msg, exc_info=True)
@@ -294,7 +383,8 @@ class ConductorService:
                 role="system",
                 content=error_msg,
                 status="error",
-                error_message=str(e)
+                error_message=str(e),
+                metadata=metadata,
             )
             
             raise Exception(error_msg)

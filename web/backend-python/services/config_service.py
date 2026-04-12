@@ -41,7 +41,12 @@ class ConfigService:
     
     def get_default_ai_model(self) -> Optional[Dict[str, Any]]:
         """获取默认AI模型配置"""
-        sql = "SELECT * FROM ai_model_config WHERE is_default = TRUE AND is_active = TRUE LIMIT 1"
+        sql = """
+            SELECT * FROM ai_model_config
+            WHERE is_default = TRUE AND is_active = TRUE
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        """
         results = self.db.execute_query(sql)
         return results[0] if results else None
     
@@ -75,6 +80,21 @@ class ConfigService:
         
         if not updates:
             return False
+
+        # 保证默认模型唯一，且默认模型必须启用
+        if data.get("is_default") is True:
+            target = self.db.execute_query(
+                "SELECT id FROM ai_model_config WHERE id = %s LIMIT 1",
+                (model_id,),
+            )
+            if not target:
+                return False
+            if data.get("is_active") is False:
+                raise ValueError("默认模型必须处于启用状态")
+            self.db.execute_update(
+                "UPDATE ai_model_config SET is_default = FALSE, updated_at = NOW() WHERE id <> %s",
+                (model_id,),
+            )
         
         updates.append("updated_at = NOW()")
         params.append(model_id)
@@ -99,6 +119,14 @@ class ConfigService:
         for field in required_fields:
             if field not in data:
                 raise ValueError(f"缺少必填字段: {field}")
+
+        # 默认模型必须启用；创建新默认时先取消其他默认
+        if data.get("is_default", False) and not data.get("is_active", True):
+            raise ValueError("默认模型必须处于启用状态")
+        if data.get("is_default", False):
+            self.db.execute_update(
+                "UPDATE ai_model_config SET is_default = FALSE, updated_at = NOW() WHERE is_default = TRUE"
+            )
         
         sql = """
             INSERT INTO ai_model_config 
@@ -123,6 +151,39 @@ class ConfigService:
         return result[0]['id'] if result else 0
     
     # ==================== Agent 配置 ====================
+
+    def _get_active_agent_model_bindings(self) -> Dict[str, int]:
+        """获取启用的 Agent -> 模型ID 绑定关系。"""
+        sql = """
+            SELECT config_key, config_value
+            FROM system_config
+            WHERE config_key LIKE 'agent_model.%' AND is_active = TRUE
+        """
+        rows = self.db.execute_query(sql)
+        bindings: Dict[str, int] = {}
+        for row in rows:
+            config_key = str(row.get("config_key") or "")
+            if not config_key.startswith("agent_model."):
+                continue
+            agent_code = config_key.removeprefix("agent_model.").strip()
+            raw_value = str(row.get("config_value") or "").strip()
+            if not agent_code or not raw_value:
+                continue
+            try:
+                bindings[agent_code] = int(raw_value)
+            except (TypeError, ValueError):
+                logger.warning(f"忽略非法Agent模型绑定值: {config_key}={raw_value}")
+        return bindings
+
+    def _get_ai_model_name_map(self, model_ids: List[int]) -> Dict[int, str]:
+        """批量查询模型ID到模型名称的映射。"""
+        if not model_ids:
+            return {}
+        unique_ids = sorted(set(model_ids))
+        placeholders = ", ".join(["%s"] * len(unique_ids))
+        sql = f"SELECT id, model_name FROM ai_model_config WHERE id IN ({placeholders}) AND is_active = TRUE"
+        rows = self.db.execute_query(sql, tuple(unique_ids))
+        return {int(row["id"]): str(row["model_name"]) for row in rows}
     
     def get_agents(self, is_enabled: Optional[bool] = None) -> List[Dict[str, Any]]:
         """
@@ -142,13 +203,37 @@ class ConfigService:
             params = (is_enabled,)
         
         sql += " ORDER BY id ASC"
-        return self.db.execute_query(sql, params)
+        agents = self.db.execute_query(sql, params)
+
+        # 附加每个Agent当前绑定模型信息（无绑定则为None，表示跟随默认模型）
+        bindings = self._get_active_agent_model_bindings()
+        model_name_map = self._get_ai_model_name_map(list(bindings.values()))
+        for agent in agents:
+            agent_code = str(agent.get("agent_code") or "")
+            bound_model_id = bindings.get(agent_code)
+            bound_model_name = model_name_map.get(bound_model_id) if bound_model_id is not None else None
+            agent["model_id"] = bound_model_id if bound_model_name else None
+            agent["model_name"] = bound_model_name
+
+        return agents
     
     def get_agent_by_code(self, agent_code: str) -> Optional[Dict[str, Any]]:
         """根据代码获取Agent配置"""
         sql = "SELECT * FROM agent_config WHERE agent_code = %s"
         results = self.db.execute_query(sql, (agent_code,))
-        return results[0] if results else None
+        if not results:
+            return None
+
+        agent = results[0]
+        bindings = self._get_active_agent_model_bindings()
+        bound_model_id = bindings.get(agent_code)
+        bound_model_name = None
+        if bound_model_id is not None:
+            name_map = self._get_ai_model_name_map([bound_model_id])
+            bound_model_name = name_map.get(bound_model_id)
+        agent["model_id"] = bound_model_id if bound_model_name else None
+        agent["model_name"] = bound_model_name
+        return agent
     
     def update_agent(self, agent_id: int, data: Dict[str, Any]) -> bool:
         """更新Agent配置"""
@@ -171,6 +256,75 @@ class ConfigService:
         sql = f"UPDATE agent_config SET {', '.join(updates)} WHERE id = %s"
         affected = self.db.execute_update(sql, tuple(params))
         return affected > 0
+
+    def get_agent_model_binding(self, agent_code: str) -> Optional[Dict[str, Any]]:
+        """获取指定Agent的模型绑定（无绑定表示跟随默认模型）。"""
+        agent = self.get_agent_by_code(agent_code)
+        if not agent:
+            return None
+        return {
+            "agent_code": agent_code,
+            "model_id": agent.get("model_id"),
+            "model_name": agent.get("model_name"),
+        }
+
+    def update_agent_model_binding(self, agent_code: str, model_id: Optional[int]) -> bool:
+        """更新指定Agent的模型绑定。model_id=None 表示清空绑定并跟随默认模型。"""
+        agent = self.get_agent_by_code(agent_code)
+        if not agent:
+            return False
+
+        config_key = f"agent_model.{agent_code}"
+        description = f"Agent {agent_code} 绑定模型ID（为空表示跟随默认模型）"
+
+        if model_id is None:
+            # 清空绑定：标记为不活跃
+            sql = """
+                UPDATE system_config
+                SET config_value = '', is_active = FALSE, updated_at = NOW()
+                WHERE config_key = %s
+            """
+            self.db.execute_update(sql, (config_key,))
+            return True
+
+        model = self.db.execute_query(
+            "SELECT id, model_name, is_active FROM ai_model_config WHERE id = %s LIMIT 1",
+            (model_id,),
+        )
+        if not model:
+            raise ValueError(f"未找到模型ID: {model_id}")
+        if not bool(model[0].get("is_active")):
+            raise ValueError(f"模型未启用，无法绑定: {model[0].get('model_name')}")
+
+        update_sql = """
+            UPDATE system_config
+            SET config_value = %s, config_type = 'int', category = 'agent',
+                description = %s, is_active = TRUE, updated_at = NOW()
+            WHERE config_key = %s
+        """
+        affected = self.db.execute_update(update_sql, (str(model_id), description, config_key))
+        if affected > 0:
+            return True
+
+        db_type = getattr(self.db, "db_type", "mysql")
+        if db_type == "starrocks":
+            max_id_row = self.db.execute_query("SELECT COALESCE(MAX(id), 0) AS max_id FROM system_config")
+            next_id = int(max_id_row[0]["max_id"]) + 1 if max_id_row else 1
+            insert_sql = """
+                INSERT INTO system_config
+                (id, config_key, config_value, config_type, category, description, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, 'int', 'agent', %s, TRUE, NOW(), NOW())
+            """
+            self.db.execute_update(insert_sql, (next_id, config_key, str(model_id), description))
+        else:
+            insert_sql = """
+                INSERT INTO system_config
+                (config_key, config_value, config_type, category, description, is_active, created_at, updated_at)
+                VALUES (%s, %s, 'int', 'agent', %s, TRUE, NOW(), NOW())
+            """
+            self.db.execute_update(insert_sql, (config_key, str(model_id), description))
+
+        return True
     
     # ==================== Agent 提示词 ====================
     

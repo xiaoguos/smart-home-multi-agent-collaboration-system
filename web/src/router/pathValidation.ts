@@ -11,6 +11,7 @@ export function isValidAppPath(pathname: string): boolean {
     "/auth/wechat/callback",
     "/chat",
     "/about",
+    "/plugins",
     "/account-setting",
     "/xiaomi-binding",
     "/dida-binding",

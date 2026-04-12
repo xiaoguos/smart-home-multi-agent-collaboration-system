@@ -7,6 +7,7 @@ export interface ChatRequest {
   query: string;
   system_user_id: number;
   context_id?: string;
+  agent_code?: string;
 }
 
 export interface ChatResponse {
@@ -14,6 +15,7 @@ export interface ChatResponse {
   context_id: string;
   task_id?: string;
   status: string;
+  agent_code: string;
 }
 
 /**
@@ -23,11 +25,13 @@ export async function sendChatMessage(
   query: string,
   systemUserId: number,
   contextId?: string,
+  agentCode: string = 'conductor',
   signal?: AbortSignal
 ): Promise<ChatResponse> {
   return await httpClient.post<ChatResponse>('/api/v1/chat', {
     query,
     system_user_id: systemUserId,
     context_id: contextId,
+    agent_code: agentCode,
   }, { signal });
 }

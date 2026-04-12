@@ -4,27 +4,57 @@ import {
   Input,
   InputNumber,
   Switch,
+  Select,
   message,
   Table,
   Modal,
   Tag,
+  Space,
 } from "antd";
 import React, { useState, useEffect } from "react";
-import { EditOutlined } from "@ant-design/icons";
+import { EditOutlined, SettingOutlined } from "@ant-design/icons";
 import "../styles/setting.sass";
-import { getAgents, updateAgent, type Agent } from "../../../api/config";
+import {
+  getAgents,
+  updateAgent,
+  getAgentPrompt,
+  updateAgentPrompt,
+  getAIModels,
+  updateAgentModelBinding,
+  type AIModel,
+  type Agent,
+} from "../../../api/config";
 
 const AgentConnections: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selected, setSelected] = useState<Agent | null>(null);
-  const [form] = Form.useForm();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<Agent | null>(null);
+  const [selectedPromptAgent, setSelectedPromptAgent] = useState<Agent | null>(null);
+  const [connectionModalOpen, setConnectionModalOpen] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [connectionForm] = Form.useForm();
+  const [promptForm] = Form.useForm();
+  const [prompts, setPrompts] = useState<Record<string, string>>({});
+  const [activeModels, setActiveModels] = useState<AIModel[]>([]);
 
   const load = async () => {
     try {
       setLoading(true);
-      setAgents(await getAgents());
+      const [data, models] = await Promise.all([getAgents(), getAIModels(true)]);
+      setAgents(data);
+      setActiveModels(models);
+
+      const promptEntries = await Promise.all(
+        data.map(async (agent) => {
+          try {
+            const prompt = await getAgentPrompt(agent.agent_code);
+            return [agent.agent_code, prompt.prompt_text] as const;
+          } catch {
+            return [agent.agent_code, ""] as const;
+          }
+        }),
+      );
+      setPrompts(Object.fromEntries(promptEntries));
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       message.error(`加载 Agent 失败: ${msg}`);
@@ -37,25 +67,60 @@ const AgentConnections: React.FC = () => {
     void load();
   }, []);
 
-  const openEdit = (agent: Agent) => {
-    setSelected(agent);
-    form.setFieldsValue(agent);
-    setModalOpen(true);
+  const openConnectionEdit = (agent: Agent) => {
+    setSelectedConnection(agent);
+    connectionForm.setFieldsValue({
+      ...agent,
+      model_id: agent.model_id ?? undefined,
+    });
+    setConnectionModalOpen(true);
   };
 
-  const save = async () => {
+  const saveConnection = async () => {
     try {
-      const values = await form.validateFields();
-      if (selected) {
-        await updateAgent(selected.id, values);
-        message.success("Agent 连接信息已更新");
+      const values = await connectionForm.validateFields();
+      if (selectedConnection) {
+        const { model_id, ...agentValues } = values;
+        await updateAgent(selectedConnection.id, agentValues);
+        await updateAgentModelBinding(selectedConnection.agent_code, model_id ?? null);
+        message.success("Agent 配置与模型已更新");
       }
-      setModalOpen(false);
+      setConnectionModalOpen(false);
       void load();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       message.error(`保存失败: ${msg}`);
     }
+  };
+
+  const openPromptEdit = (agent: Agent) => {
+    setSelectedPromptAgent(agent);
+    promptForm.setFieldsValue({ prompt_text: prompts[agent.agent_code] ?? "" });
+    setPromptModalOpen(true);
+  };
+
+  const savePrompt = async () => {
+    try {
+      const values = await promptForm.validateFields();
+      if (selectedPromptAgent) {
+        await updateAgentPrompt(selectedPromptAgent.agent_code, values.prompt_text);
+        setPrompts((prev) => ({
+          ...prev,
+          [selectedPromptAgent.agent_code]: values.prompt_text,
+        }));
+        message.success("Agent 系统提示词已更新");
+      }
+      setPromptModalOpen(false);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      message.error(`保存失败: ${msg}`);
+    }
+  };
+
+  const renderPromptPreview = (agentCode: string) => {
+    const text = prompts[agentCode] ?? "";
+    if (!text) return "（空）";
+    return text.length > 120 ? `${text.slice(0, 120)}…` : text;
   };
 
   const columns = [
@@ -71,12 +136,33 @@ const AgentConnections: React.FC = () => {
       render: (val: boolean) => (val ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag>),
     },
     {
+      title: "绑定模型",
+      key: "model_name",
+      render: (_: unknown, record: Agent) =>
+        record.model_name ? <Tag color="blue">{record.model_name}</Tag> : <Tag>跟随默认模型</Tag>,
+    },
+    {
+      title: "提示词预览",
+      key: "prompt_preview",
+      render: (_: unknown, record: Agent) => (
+        <div style={{ maxWidth: 520, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {renderPromptPreview(record.agent_code)}
+        </div>
+      ),
+    },
+    {
       title: "操作",
       key: "action",
+      width: 180,
       render: (_: unknown, record: Agent) => (
-        <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-          编辑
-        </Button>
+        <Space size={4}>
+          <Button type="link" icon={<SettingOutlined />} onClick={() => openConnectionEdit(record)}>
+            状态/连接
+          </Button>
+          <Button type="link" icon={<EditOutlined />} onClick={() => openPromptEdit(record)}>
+            提示词
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -84,13 +170,26 @@ const AgentConnections: React.FC = () => {
   return (
     <>
       <div className="setting-section">
-        <h2 className="setting-page-title">连接与状态</h2>
-        <p className="setting-page-desc">配置各 Agent 的主机、端口与启用状态</p>
+        <h2 className="setting-page-title">Agent配置</h2>
+        <p className="setting-page-desc">整合管理 Agent 连接状态、系统提示词与模型绑定</p>
       </div>
-      <Table dataSource={agents} columns={columns} rowKey="id" loading={loading} pagination={false} />
+      <Table
+        dataSource={agents}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+        scroll={{ x: 1000 }}
+      />
 
-      <Modal title="编辑 Agent 连接信息" open={modalOpen} onOk={() => void save()} onCancel={() => setModalOpen(false)} width={500}>
-        <Form form={form} layout="vertical">
+      <Modal
+        title="编辑 Agent 状态与连接"
+        open={connectionModalOpen}
+        onOk={() => void saveConnection()}
+        onCancel={() => setConnectionModalOpen(false)}
+        width={500}
+      >
+        <Form form={connectionForm} layout="vertical">
           <Form.Item label="Agent名称" name="agent_name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -103,8 +202,40 @@ const AgentConnections: React.FC = () => {
           <Form.Item label="描述" name="description">
             <Input.TextArea rows={3} />
           </Form.Item>
+          <Form.Item
+            label="绑定模型"
+            name="model_id"
+            extra="不选择时将跟随全局默认模型"
+          >
+            <Select
+              allowClear
+              placeholder="跟随默认模型"
+              options={activeModels.map((item) => ({
+                value: item.id,
+                label: `${item.model_name} (${item.provider})`,
+              }))}
+            />
+          </Form.Item>
           <Form.Item label="启用" name="is_enabled" valuePropName="checked">
             <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`编辑系统提示词 — ${selectedPromptAgent?.agent_name ?? ""}`}
+        open={promptModalOpen}
+        onOk={() => void savePrompt()}
+        onCancel={() => setPromptModalOpen(false)}
+        width={900}
+      >
+        <Form form={promptForm} layout="vertical">
+          <Form.Item
+            label="系统提示词"
+            name="prompt_text"
+            rules={[{ required: true, message: "请输入系统提示词" }]}
+          >
+            <Input.TextArea rows={18} style={{ fontFamily: "monospace" }} />
           </Form.Item>
         </Form>
       </Modal>

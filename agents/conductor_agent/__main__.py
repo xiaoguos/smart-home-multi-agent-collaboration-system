@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option("--host", "host", default=None, help="服务主机地址（默认从config.yaml读取）")
-@click.option("--port", "port", default=None, type=int, help="服务端口（默认从config.yaml读取）")
+@click.option("--host", "host", default=None, help="服务主机地址（默认从 .env/config.yaml 读取）")
+@click.option("--port", "port", default=None, type=int, help="服务端口（默认从 .env/config.yaml 读取）")
 @click.option("--debug", "debug_mode", is_flag=True, default=False, help="启用 debug 模式（兼容 PyCharm debugger）")
 def main(host, port, debug_mode):
     """Starts the Conductor Agent server."""

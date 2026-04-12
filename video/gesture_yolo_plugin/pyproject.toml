@@ -1,0 +1,25 @@
+[project]
+name = "gesture-yolo-plugin"
+version = "0.1.0"
+description = "Standalone YOLO gesture recognition plugin for edge deployment."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "ultralytics>=8.3.0",
+    "opencv-python-headless>=4.10.0.84",
+    "numpy>=1.26.0",
+    "python-dotenv>=1.0.1",
+    "pydantic>=2.10.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]

@@ -71,6 +71,8 @@ class AgentResponse(BaseModel):
     port: int
     description: Optional[str] = None
     is_enabled: bool = True
+    model_id: Optional[int] = None
+    model_name: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -92,6 +94,21 @@ class AgentPromptUpdate(BaseModel):
     """Agent提示词更新模型"""
     prompt_text: str
     version: str = "v1.0"
+
+
+class AgentModelBindingResponse(BaseModel):
+    """Agent模型绑定响应模型"""
+    agent_code: str
+    model_id: Optional[int] = None
+    model_name: Optional[str] = None
+
+
+class AgentModelBindingUpdate(BaseModel):
+    """Agent模型绑定更新模型"""
+    model_id: Optional[int] = Field(
+        default=None,
+        description="绑定的模型ID；为null表示清空绑定并跟随默认模型",
+    )
 
 
 class DeviceResponse(BaseModel):
@@ -231,6 +248,8 @@ async def update_ai_model(model_id: int, data: AIModelUpdate):
         if not success:
             raise HTTPException(status_code=404, detail="更新失败或未找到该模型")
         return {"message": "更新成功", "model_id": model_id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -330,6 +349,40 @@ async def update_agent_prompt(agent_code: str, data: AgentPromptUpdate):
         raise
     except Exception as e:
         logger.error(f"更新Agent提示词失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/agents/{agent_code}/model-binding", response_model=AgentModelBindingResponse)
+async def get_agent_model_binding(agent_code: str):
+    """获取Agent绑定模型"""
+    try:
+        config_service = get_config_service()
+        binding = config_service.get_agent_model_binding(agent_code)
+        if not binding:
+            raise HTTPException(status_code=404, detail="未找到该Agent")
+        return binding
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取Agent模型绑定失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/agents/{agent_code}/model-binding")
+async def update_agent_model_binding(agent_code: str, data: AgentModelBindingUpdate):
+    """更新Agent绑定模型"""
+    try:
+        config_service = get_config_service()
+        success = config_service.update_agent_model_binding(agent_code, data.model_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="更新失败或未找到该Agent")
+        return {"message": "Agent模型绑定更新成功", "agent_code": agent_code}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新Agent模型绑定失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

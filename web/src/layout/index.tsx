@@ -16,24 +16,14 @@ export const RootLayout: React.FC = () => {
   const sideBarMenus: MenuProps["items"] = useMemo(() => {
     const core: NonNullable<MenuProps["items"]> = [
       { key: "chat", label: "对话" },
-      {
-        key: "models",
-        label: "模型",
-        children: [{ key: "models-llm", label: "LLM 模型" }],
-      },
-      {
-        key: "agents",
-        label: "Agent",
-        children: [
-          { key: "agents-conn", label: "连接与状态" },
-          { key: "agents-prompt", label: "系统提示词" },
-        ],
-      },
+      { key: "model-config", label: "模型配置" },
+      { key: "agent-config", label: "Agent配置" },
+      { key: "plugin-config", label: "插件菜单" },
       {
         key: "devices",
         label: "设备",
         children: [
-          { key: "devices-local", label: "本地设备" },
+          { key: "devices-local", label: "自定义设备" },
           { key: "devices-mihome", label: "米家设备" },
         ],
       },
@@ -52,8 +42,6 @@ export const RootLayout: React.FC = () => {
     const p = location.pathname;
     setOpenKeys((prev) => {
       const next = new Set(prev);
-      if (p.startsWith("/models")) next.add("models");
-      if (p.startsWith("/agents")) next.add("agents");
       if (p.startsWith("/devices")) next.add("devices");
       if (p.startsWith("/claw")) next.add("claw");
       return [...next];
@@ -63,9 +51,9 @@ export const RootLayout: React.FC = () => {
   const handleSideMenuClick: MenuProps["onClick"] = ({ key }) => {
     if (key === "chat") navigate("/chat");
     else if (key === "about") navigate("/about");
-    else if (key === "models-llm") navigate("/models/llm");
-    else if (key === "agents-conn") navigate("/agents/connections");
-    else if (key === "agents-prompt") navigate("/agents/prompts");
+    else if (key === "model-config") navigate("/models");
+    else if (key === "agent-config") navigate("/agents");
+    else if (key === "plugin-config") navigate("/plugins");
     else if (key === "devices-local") navigate("/devices/local");
     else if (key === "devices-mihome") navigate("/devices/mihome");
     else if (key === "claw-open") navigate("/claw/open");
@@ -76,9 +64,9 @@ export const RootLayout: React.FC = () => {
     const path = location.pathname;
     if (path === "/" || path === "/chat") return ["chat"];
     if (path === "/about") return ["about"];
-    if (path.startsWith("/models/llm")) return ["models-llm"];
-    if (path.startsWith("/agents/connections")) return ["agents-conn"];
-    if (path.startsWith("/agents/prompts")) return ["agents-prompt"];
+    if (path.startsWith("/models")) return ["model-config"];
+    if (path.startsWith("/agents")) return ["agent-config"];
+    if (path.startsWith("/plugins")) return ["plugin-config"];
     if (path.startsWith("/devices/local")) return ["devices-local"];
     if (path.startsWith("/devices/mihome")) return ["devices-mihome"];
     if (path.startsWith("/claw/open")) return ["claw-open"];

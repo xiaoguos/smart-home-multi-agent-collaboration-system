@@ -2,6 +2,7 @@ import logging
 import hashlib
 import time
 import random
+import re
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -49,6 +50,22 @@ class LoginResponse(BaseModel):
     xiaomi_bound: bool = False  # 是否已绑定小米账号
 
 
+class UserProfileUpdateRequest(BaseModel):
+    """用户资料更新请求"""
+    user_id: int = Field(..., description="用户ID")
+    nickname: Optional[str] = Field(None, max_length=50, description="昵称")
+    email: Optional[str] = Field(None, max_length=255, description="邮箱")
+    phone: Optional[str] = Field(None, max_length=32, description="手机号")
+    avatar: Optional[str] = Field(None, max_length=500, description="头像URL")
+
+
+class UserProfileUpdateResponse(BaseModel):
+    """用户资料更新响应"""
+    success: bool
+    message: str
+    user: UserResponse
+
+
 # ==================== 辅助函数 ====================
 
 def hash_password(password: str) -> str:
@@ -65,6 +82,13 @@ def generate_token(user_id: int) -> str:
 def generate_user_id() -> int:
     """生成用户ID"""
     return int(time.time() * 1000) + random.randint(1000, 9999)
+
+
+def _normalize_optional_string(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed if trimmed else None
 
 
 # ==================== API 端点 ====================
@@ -259,5 +283,106 @@ async def check_username(username: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+
+
+@router.put("/profile", response_model=UserProfileUpdateResponse)
+async def update_profile(data: UserProfileUpdateRequest):
+    """
+    更新用户基本资料
+    """
+    try:
+        user_sql = """
+            SELECT id, username, nickname, email, phone, avatar, created_at
+            FROM users
+            WHERE id = %s
+            LIMIT 1
+        """
+        user_rows = query(user_sql, (data.user_id,))
+        if not user_rows:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户不存在"
+            )
+
+        update_payload = data.model_dump(exclude_unset=True)
+        update_payload.pop("user_id", None)
+
+        normalized_updates = {}
+        for field_name, raw_value in update_payload.items():
+            normalized_updates[field_name] = _normalize_optional_string(raw_value)
+
+        if "email" in normalized_updates and normalized_updates["email"] is not None:
+            email_pattern = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+            if not email_pattern.fullmatch(normalized_updates["email"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="邮箱格式不正确"
+                )
+
+            email_check_sql = "SELECT id FROM users WHERE email = %s AND id <> %s LIMIT 1"
+            same_email_users = query(email_check_sql, (normalized_updates["email"], data.user_id))
+            if same_email_users:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="该邮箱已被其他账号使用"
+                )
+
+        if "phone" in normalized_updates and normalized_updates["phone"] is not None:
+            phone_pattern = re.compile(r"^[0-9+\-\s]{6,20}$")
+            if not phone_pattern.fullmatch(normalized_updates["phone"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="手机号格式不正确"
+                )
+
+        if "avatar" in normalized_updates and normalized_updates["avatar"] is not None:
+            if not (
+                normalized_updates["avatar"].startswith("http://")
+                or normalized_updates["avatar"].startswith("https://")
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="头像地址需以 http:// 或 https:// 开头"
+                )
+
+        if normalized_updates:
+            set_parts = [f"{field_name} = %s" for field_name in normalized_updates.keys()]
+            update_sql = f"""
+                UPDATE users
+                SET {", ".join(set_parts)}, updated_at = NOW()
+                WHERE id = %s
+            """
+            update_params = tuple(normalized_updates.values()) + (data.user_id,)
+            update(update_sql, update_params)
+
+        refreshed_rows = query(user_sql, (data.user_id,))
+        if not refreshed_rows:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户不存在"
+            )
+
+        refreshed = refreshed_rows[0]
+        return UserProfileUpdateResponse(
+            success=True,
+            message="用户资料更新成功",
+            user=UserResponse(
+                id=refreshed["id"],
+                username=refreshed["username"],
+                nickname=refreshed.get("nickname"),
+                email=refreshed.get("email"),
+                phone=refreshed.get("phone"),
+                avatar=refreshed.get("avatar"),
+                created_at=str(refreshed.get("created_at", "")),
+            ),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新用户资料失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新用户资料失败: {str(e)}"
         )
 

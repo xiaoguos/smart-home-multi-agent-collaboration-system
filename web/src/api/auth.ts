@@ -30,6 +30,22 @@ export interface UserInfo {
   created_at: string;
 }
 
+/** 用户资料更新请求 */
+export interface UpdateUserProfileRequest {
+  user_id: number;
+  nickname?: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+}
+
+/** 用户资料更新响应 */
+export interface UpdateUserProfileResponse {
+  success: boolean;
+  message: string;
+  user: UserInfo;
+}
+
 /** 登录响应 */
 export interface LoginResponse {
   success: boolean;
@@ -65,6 +81,15 @@ export const logout = async (): Promise<{ success: boolean; message: string }> =
  */
 export const checkUsername = async (username: string): Promise<{ available: boolean; message: string }> => {
   return await httpClient.get(`/api/v1/auth/check-username/${username}`);
+};
+
+/**
+ * 更新用户资料
+ */
+export const updateUserProfile = async (
+  data: UpdateUserProfileRequest,
+): Promise<UpdateUserProfileResponse> => {
+  return await httpClient.put<UpdateUserProfileResponse>("/api/v1/auth/profile", data);
 };
 
 /**

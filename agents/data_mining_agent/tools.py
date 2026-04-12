@@ -29,9 +29,8 @@ def get_db_config():
     if _db_config is None:
         try:
             config_loader = get_config_loader(strict_mode=False)
-            config = config_loader.config
-            _db_config = config.get("database", {}).get("starrocks", {})
-            logger.info("✅ 数据库配置加载成功")
+            _db_config = dict(config_loader.db_config or {})
+            logger.info("✅ 数据库配置加载成功（.env 优先，config.yaml 回退）")
         except Exception as e:
             logger.error(f"❌ 数据库配置加载失败: {e}")
             _db_config = {}

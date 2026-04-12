@@ -16,21 +16,28 @@ async def chat(request: ChatRequest):
     """
     聊天接口
     
-    接收前端消息，转发给 Conductor Agent，返回 AI 回复
+    接收前端消息，转发给指定的启用 Agent，返回 AI 回复
     同时将对话记录和设备操作记录存储到数据库
     """
     try:
         # 如果没有提供 context_id，生成一个新的
         context_id = request.context_id or f"session-{uuid4().hex[:16]}"
         
-        logger.info(f"💬 收到聊天请求: {request.query[:50]}... (user: {request.system_user_id}, context: {context_id})")
+        logger.info(
+            "💬 收到聊天请求: %s... (user: %s, context: %s, agent: %s)",
+            request.query[:50],
+            request.system_user_id,
+            context_id,
+            request.agent_code,
+        )
         
-        # 调用 Conductor Agent（传递用户ID）
+        # 调用目标 Agent（传递用户ID）
         # conductor_service 已经处理了数据库存储逻辑
         result = await conductor_service.send_message(
             user_message=request.query,
             system_user_id=request.system_user_id,
-            context_id=context_id
+            context_id=context_id,
+            agent_code=request.agent_code,
         )
         
         # 构建响应
@@ -38,7 +45,8 @@ async def chat(request: ChatRequest):
             content=result["content"],
             context_id=result["context_id"],
             task_id=result.get("task_id"),
-            status=result["status"]
+            status=result["status"],
+            agent_code=result.get("agent_code", request.agent_code),
         )
         
         # 根据状态记录不同的日志
@@ -49,6 +57,12 @@ async def chat(request: ChatRequest):
         
         return response
         
+    except ValueError as e:
+        logger.warning(f"⚠️ 聊天请求参数错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except Exception as e:
         logger.error(f"❌ 聊天请求失败: {e}", exc_info=True)
         # 注意：conductor_service 已经保存了错误到数据库
