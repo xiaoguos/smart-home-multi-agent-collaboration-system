@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from database import query, insert, update
+from database import query, insert, update, get_db_type
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -293,9 +293,11 @@ async def update_profile(data: UserProfileUpdateRequest):
     """
     try:
         user_sql = """
-            SELECT id, username, nickname, email, phone, avatar, created_at
+            SELECT id, username, password, nickname, email, phone, avatar,
+                   status, created_at, updated_at, last_login_at
             FROM users
             WHERE id = %s
+            ORDER BY updated_at DESC
             LIMIT 1
         """
         user_rows = query(user_sql, (data.user_id,))
@@ -346,15 +348,56 @@ async def update_profile(data: UserProfileUpdateRequest):
                     detail="头像地址需以 http:// 或 https:// 开头"
                 )
 
+        db_type = str(get_db_type()).strip().lower()
+
         if normalized_updates:
-            set_parts = [f"{field_name} = %s" for field_name in normalized_updates.keys()]
-            update_sql = f"""
-                UPDATE users
-                SET {", ".join(set_parts)}, updated_at = NOW()
-                WHERE id = %s
-            """
-            update_params = tuple(normalized_updates.values()) + (data.user_id,)
-            update(update_sql, update_params)
+            if db_type == "starrocks":
+                # StarRocks DUPLICATE KEY 表不支持 UPDATE，改用 DELETE + INSERT。
+                original_user = user_rows[0].copy()
+                current_user = original_user.copy()
+                for field_name, field_value in normalized_updates.items():
+                    current_user[field_name] = field_value
+
+                insert_sql = """
+                    INSERT INTO users
+                    (id, username, password, email, phone, nickname, avatar,
+                     status, created_at, updated_at, last_login_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+                """
+                def build_insert_params(user_record: dict):
+                    return (
+                        user_record["id"],
+                        user_record["username"],
+                        user_record["password"],
+                        user_record.get("email"),
+                        user_record.get("phone"),
+                        user_record.get("nickname"),
+                        user_record.get("avatar"),
+                        user_record.get("status", 1),
+                        user_record.get("created_at"),
+                        user_record.get("last_login_at"),
+                    )
+
+                update("DELETE FROM users WHERE id = %s", (data.user_id,))
+                try:
+                    insert(insert_sql, build_insert_params(current_user))
+                except Exception:
+                    # 尽最大努力回滚，避免删除后插入失败导致用户数据丢失。
+                    logger.exception("StarRocks 更新用户资料失败，尝试回滚原始记录")
+                    try:
+                        insert(insert_sql, build_insert_params(original_user))
+                    except Exception:
+                        logger.exception("StarRocks 用户资料回滚失败")
+                    raise
+            else:
+                set_parts = [f"{field_name} = %s" for field_name in normalized_updates.keys()]
+                update_sql = f"""
+                    UPDATE users
+                    SET {", ".join(set_parts)}, updated_at = NOW()
+                    WHERE id = %s
+                """
+                update_params = tuple(normalized_updates.values()) + (data.user_id,)
+                update(update_sql, update_params)
 
         refreshed_rows = query(user_sql, (data.user_id,))
         if not refreshed_rows:

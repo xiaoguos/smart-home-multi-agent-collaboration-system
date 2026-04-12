@@ -496,14 +496,30 @@ const Chat: React.FC = () => {
   // 发送消息
   const sendMessage = async (userMessage: string) => {
     try {
-      const activeAgentCode = selectedAgentCode.trim();
-      if (!activeAgentCode) {
-        message.warning("当前没有可用Agent，请先在配置页启用Agent");
+      const normalizedMessage = userMessage.trim();
+      if (!normalizedMessage) {
+        message.warning("请输入消息内容！");
         return;
       }
-      if (!enabledAgents.some((agent) => agent.agent_code === activeAgentCode)) {
-        message.warning("所选Agent不可用，正在刷新可用列表");
-        await loadEnabledAgents();
+
+      let activeAgentCode = selectedAgentCode.trim();
+      if (!activeAgentCode) {
+        activeAgentCode = getDefaultAgentCode() || "conductor";
+        if (activeAgentCode) {
+          setSelectedAgentCode(activeAgentCode);
+        }
+      }
+
+      if (enabledAgents.length > 0 && !enabledAgents.some((agent) => agent.agent_code === activeAgentCode)) {
+        const fallbackAgentCode = getDefaultAgentCode() || enabledAgents[0]?.agent_code || "conductor";
+        activeAgentCode = fallbackAgentCode;
+        if (activeAgentCode) {
+          setSelectedAgentCode(activeAgentCode);
+        }
+      }
+
+      if (!activeAgentCode) {
+        message.warning("当前没有可用Agent，请先在配置页启用Agent");
         return;
       }
 
@@ -516,7 +532,7 @@ const Chat: React.FC = () => {
       const userMsg: Message = {
         key: messages.length,
         role: "user",
-        content: userMessage,
+        content: normalizedMessage,
       };
       setMessages((prev) => [...prev, userMsg]);
 
@@ -529,7 +545,7 @@ const Chat: React.FC = () => {
 
       // 通过 FastAPI 后端发送
       const response = await sendChatMessage(
-        userMessage, 
+        normalizedMessage, 
         systemUserId, 
         contextId.current,
         activeAgentCode,
@@ -910,18 +926,15 @@ const Chat: React.FC = () => {
             onChange={(v) => {
               setValue(v);
             }}
-            onSubmit={() => {
-              if (!value.trim()) {
+            onSubmit={(submitValue) => {
+              const rawMessage = typeof submitValue === "string" ? submitValue : value;
+              const userMessage = rawMessage.trim();
+              if (!userMessage) {
                 message.warning("请输入消息内容！");
                 return;
               }
-              if (!selectedAgentCode) {
-                message.warning("请先选择可用Agent");
-                return;
-              }
-              const userMessage = value;
               setValue("");
-              sendMessage(userMessage);
+              void sendMessage(userMessage);
             }}
             onCancel={() => {
               if (abortControllerRef.current) {

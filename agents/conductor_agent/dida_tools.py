@@ -9,9 +9,20 @@ from typing import Dict, Any, Optional
 import logging
 import sys
 import os
+from pathlib import Path
 
-# 添加父目录到路径以导入backend模块
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'app', 'backend-python'))
+# 添加后端路径，优先使用当前项目结构 web/backend-python
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent.parent
+BACKEND_CANDIDATES = [
+    PROJECT_ROOT / "web" / "backend-python"
+]
+
+for backend_path in BACKEND_CANDIDATES:
+    backend_path_str = str(backend_path)
+    if backend_path.exists() and backend_path_str not in sys.path:
+        sys.path.insert(0, backend_path_str)
+        break
 
 logger = logging.getLogger(__name__)
 
