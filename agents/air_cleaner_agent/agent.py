@@ -119,7 +119,7 @@ class AirPurifierAgent:
         inputs = {'messages': [('user', user_text)]}
         config = {'configurable': {'thread_id': context_id}}
 
-        self.graph.invoke(inputs, config)
+        await self.graph.ainvoke(inputs, config)
 
         return self.get_agent_response(config)
 

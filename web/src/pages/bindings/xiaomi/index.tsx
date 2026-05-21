@@ -558,13 +558,13 @@ const XiaomiBinding: React.FC = () => {
                         4. 从请求 Cookie 或响应中提取以下参数：
                       </Paragraph>
                       <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
-                        • <Text code>_ssecurity</Text>（通常在响应中）
+                        • <Text code>ssecurity</Text>（通常在响应中）
                       </Paragraph>
                       <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
                         • <Text code>userId</Text>（数字ID）
                       </Paragraph>
                       <Paragraph style={{ marginLeft: 24, marginBottom: 8 }}>
-                        • <Text code>_cUserId</Text>（长字符串）
+                        • <Text code>cUserId</Text>（长字符串）
                       </Paragraph>
                       <Paragraph style={{ marginLeft: 24, marginBottom: 0 }}>
                         • <Text code>serviceToken</Text>（很长的字符串）

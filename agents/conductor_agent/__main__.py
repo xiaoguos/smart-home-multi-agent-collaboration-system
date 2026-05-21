@@ -65,7 +65,7 @@ def main(host=None, port=None, debug_mode=False):
             streaming=False,
         )
         skill = AgentSkill(
-            id="smart_home_management",
+            id="moss_ai_management",
             name="Smart Home Management",
             description="智能家居总管理系统，协调和管理所有智能设备代理",
             tags=["smart home", "home automation", "agent management", "device control"],

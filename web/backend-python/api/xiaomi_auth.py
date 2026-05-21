@@ -514,7 +514,7 @@ class XiaomiCloudConnector:
         params = {
             "data": '{"home_owner": ' + str(owner_id) +
             ',"home_id": ' + str(home_id) +
-            ',  "limit": 200,  "get_split_device": true, "support_smart_home": true}'
+            ',  "limit": 200,  "get_split_device": true, "support_moss_ai": true}'
         }
         return self.execute_api_call_encrypted(url, params)
     

@@ -4,13 +4,12 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
+import dotenv
 import logging
-import sys
 import os
+from pathlib import Path
 
-# 添加父目录到路径以导入config_loader
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config_loader import get_config_loader
+dotenv.load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=True)
 
 from tools import get_ac_status, set_ac_power, set_ac_temperature
 
@@ -18,6 +17,21 @@ memory = MemorySaver()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _get_ai_config_from_env() -> dict:
+    """从环境变量读取 AI 模型配置，缺少必填项时抛出异常。"""
+    model = os.environ.get("AI_MODEL", "").strip()
+    api_key = os.environ.get("AI_API_KEY", "").strip()
+    api_base = os.environ.get("AI_API_BASE", "").strip()
+    temperature = float(os.environ.get("AI_TEMPERATURE", "0.7"))
+
+    missing = [k for k, v in [("AI_MODEL", model), ("AI_API_KEY", api_key), ("AI_API_BASE", api_base)] if not v]
+    if missing:
+        raise ValueError(f"缺少必要的环境变量: {', '.join(missing)}，请在 .env 中配置。")
+
+    return {"model": model, "api_key": api_key, "api_base": api_base, "temperature": temperature}
+
 
 class AirConditionerAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
@@ -49,35 +63,20 @@ class AirConditionerAgent:
     )
 
     def __init__(self):
-        # 从数据库加载配置（严格模式：配置加载失败则退出）
-        try:
-            self.config_loader = get_config_loader(strict_mode=True)
-        except Exception as e:
-            logger.error(f"❌ 配置加载失败: {e}")
-            logger.error("⚠️  请确保:")
-            logger.error("   1. StarRocks 数据库已启动")
-            logger.error("   2. 已执行数据库初始化脚本: data/init_config.sql 和 data/ai_config.sql")
-            logger.error("   3. .env 或 config.yaml 中的数据库连接配置正确")
-            raise SystemExit(1) from e
-
         self._model_signature: tuple[str, str, str, float] | None = None
         self._prompt_signature: str | None = None
-        
+
         from tools import list_devices
         self.tools = [get_ac_status, set_ac_power, set_ac_temperature, list_devices]
 
-        # 启动时初始化一次；后续每次 invoke 前会按数据库配置热更新
         self._refresh_runtime_config(force=True)
 
     def _build_system_prompt(self) -> str:
-        try:
-            system_prompt = self.config_loader.get_agent_prompt('air_conditioner')
-            return system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
-        except Exception:
-            return self.DEFAULT_SYSTEM_PROMPT
+        custom = os.environ.get("AGENT_SYSTEM_PROMPT", "").strip()
+        return custom if custom else self.DEFAULT_SYSTEM_PROMPT
 
     def _refresh_runtime_config(self, force: bool = False) -> None:
-        ai_config = self.config_loader.get_ai_model_config_for_agent("air_conditioner")
+        ai_config = _get_ai_config_from_env()
         model_signature = (
             str(ai_config['model']),
             str(ai_config['api_key']),

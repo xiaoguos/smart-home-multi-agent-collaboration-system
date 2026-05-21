@@ -1,9 +1,9 @@
 from langchain_core.tools import tool
 import json
+import os
 from pydantic import BaseModel, Field
 import logging
 import sys
-import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import numpy as np
@@ -12,29 +12,20 @@ from sklearn.preprocessing import StandardScaler
 import pymysql
 from pymysql.cursors import DictCursor
 
-# 添加父目录到路径以导入config_loader
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config_loader import get_config_loader
-
 # 配置日志
 logger = logging.getLogger(__name__)
 
-# 全局数据库配置
-_db_config = None
 
-
-def get_db_config():
-    """获取数据库配置"""
-    global _db_config
-    if _db_config is None:
-        try:
-            config_loader = get_config_loader(strict_mode=False)
-            _db_config = dict(config_loader.db_config or {})
-            logger.info("✅ 数据库配置加载成功（.env 优先，config.yaml 回退）")
-        except Exception as e:
-            logger.error(f"❌ 数据库配置加载失败: {e}")
-            _db_config = {}
-    return _db_config
+def get_db_config() -> dict:
+    """从环境变量读取数据库配置（.env 由 agent.py 提前加载）。"""
+    return {
+        "host": os.getenv("DATABASE_HOST", "localhost"),
+        "port": int(os.getenv("DATABASE_PORT", "9030")),
+        "user": os.getenv("DATABASE_USER", "root"),
+        "password": os.getenv("DATABASE_PASSWORD", ""),
+        "database": os.getenv("DATABASE_NAME", "smart_home"),
+        "charset": os.getenv("DATABASE_CHARSET", "utf8mb4"),
+    }
 
 
 def convert_numpy_types(obj):

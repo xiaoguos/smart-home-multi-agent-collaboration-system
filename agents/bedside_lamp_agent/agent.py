@@ -4,13 +4,12 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
+import dotenv
 import logging
-import sys
 import os
+from pathlib import Path
 
-# 添加父目录到路径以导入config_loader
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config_loader import get_config_loader
+dotenv.load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=True)
 
 from tools import (
     get_lamp_status,
@@ -27,10 +26,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _get_ai_config_from_env() -> dict:
+    """从环境变量读取 AI 模型配置，缺少必填项时抛出异常。"""
+    model = os.environ.get("AI_MODEL", "").strip()
+    api_key = os.environ.get("AI_API_KEY", "").strip()
+    api_base = os.environ.get("AI_API_BASE", "").strip()
+    temperature = float(os.environ.get("AI_TEMPERATURE", "0.7"))
+
+    missing = [k for k, v in [("AI_MODEL", model), ("AI_API_KEY", api_key), ("AI_API_BASE", api_base)] if not v]
+    if missing:
+        raise ValueError(f"缺少必要的环境变量: {', '.join(missing)}，请在 .env 中配置。")
+
+    return {"model": model, "api_key": api_key, "api_base": api_base, "temperature": temperature}
+
+
 class BedsideLampAgent:
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
-    
-    # 默认系统提示词（备用）
+
     DEFAULT_SYSTEM_PROMPT = (
         '你是一个专门的Yeelink床头灯控制助手（型号：yeelink.light.bslamp2）。'
         '你的唯一目的是帮助用户控制他们的床头灯。'
@@ -65,27 +77,10 @@ class BedsideLampAgent:
         '   - "浪漫模式/约会"：使用 set_lamp_scene(scene="romantic") - 30%亮度，粉红色'
         '   - "夜灯模式/起夜"：使用 set_lamp_scene(scene="night") - 5%亮度，1700K极暖光'
         ''
-        '7. 智能场景建议：'
-        '   - 阅读/工作：建议100%亮度 + 4000K中性光'
-        '   - 睡前放松：建议20-30%亮度 + 2000K暖光'
-        '   - 起夜/夜间：建议5-10%亮度 + 1700K极暖光'
-        '   - 浪漫氛围：建议30%亮度 + 粉色/紫色'
-        ''
         '始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。'
     )
 
     def __init__(self):
-        # 从数据库加载配置（严格模式：配置加载失败则退出）
-        try:
-            self.config_loader = get_config_loader(strict_mode=True)
-        except Exception as e:
-            logger.error(f"❌ 配置加载失败: {e}")
-            logger.error("⚠️  请确保:")
-            logger.error("   1. StarRocks 数据库已启动")
-            logger.error("   2. 已执行数据库初始化脚本: data/init_config.sql 和 data/ai_config.sql")
-            logger.error("   3. .env 或 config.yaml 中的数据库连接配置正确")
-            raise SystemExit(1) from e
-        
         self._model_signature: tuple[str, str, str, float] | None = None
         self._prompt_signature: str | None = None
 
@@ -98,18 +93,14 @@ class BedsideLampAgent:
             set_lamp_scene
         ]
 
-        # 启动时初始化一次；后续每次 invoke 前会按数据库配置热更新
         self._refresh_runtime_config(force=True)
 
     def _build_system_prompt(self) -> str:
-        try:
-            system_prompt = self.config_loader.get_agent_prompt('bedside_lamp')
-            return system_prompt if system_prompt else self.DEFAULT_SYSTEM_PROMPT
-        except Exception:
-            return self.DEFAULT_SYSTEM_PROMPT
+        custom = os.environ.get("AGENT_SYSTEM_PROMPT", "").strip()
+        return custom if custom else self.DEFAULT_SYSTEM_PROMPT
 
     def _refresh_runtime_config(self, force: bool = False) -> None:
-        ai_config = self.config_loader.get_ai_model_config_for_agent("bedside_lamp")
+        ai_config = _get_ai_config_from_env()
         model_signature = (
             str(ai_config['model']),
             str(ai_config['api_key']),
@@ -151,10 +142,9 @@ class BedsideLampAgent:
 
         inputs = {'messages': [('user', query)]}
         config = {'configurable': {'thread_id': context_id}}
-        
-        # 直接调用invoke，不使用stream
-        result = self.graph.invoke(inputs, config)
-        
+
+        await self.graph.ainvoke(inputs, config)
+
         return self.get_agent_response(config)
 
     def _extract_text_from_message(self, msg: AIMessage | ToolMessage | Any) -> str:
@@ -177,7 +167,6 @@ class BedsideLampAgent:
         current_state = self.graph.get_state(config)
         messages = current_state.values.get('messages') if hasattr(current_state, 'values') else None
 
-        # 优先返回最近一次工具消息内容
         if isinstance(messages, list) and messages:
             for msg in reversed(messages):
                 if isinstance(msg, ToolMessage):
@@ -189,11 +178,9 @@ class BedsideLampAgent:
                             'content': tool_text,
                         }
 
-        # 回退到最后一条 AI 消息
         final_text = ''
         if isinstance(messages, list) and messages:
-            last_msg = messages[-1]
-            final_text = self._extract_text_from_message(last_msg)
+            final_text = self._extract_text_from_message(messages[-1])
 
         if not final_text:
             return {
@@ -207,4 +194,3 @@ class BedsideLampAgent:
             'require_user_input': False,
             'content': final_text,
         }
-

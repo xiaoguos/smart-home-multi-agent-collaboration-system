@@ -9,8 +9,10 @@ from uuid import uuid4
 from datetime import datetime
 import httpx
 from a2a.client import ClientFactory, A2ACardResolver
-from a2a.types import Message, Part
+from a2a.types import Message, Part, Role
+from a2a.helpers import new_text_part
 from a2a.client.client import ClientConfig
+from a2a.client.base_client import SendMessageRequest
 import sys
 import os
 import time
@@ -313,7 +315,7 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
                 streaming=False,
                 polling=False,
                 httpx_client=httpx_client,
-                supported_transports=["JSONRPC", "http_json"],
+                supported_protocol_bindings=["JSONRPC"],
                 use_client_preference=False,
                 accepted_output_modes=["text", "text/plain"]
             )
@@ -325,16 +327,18 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             # 创建消息
             message = Message(
                 context_id=str(uuid4()),
-                role='user',
-                parts=[Part(kind='text', text=command)],
+                role=Role.ROLE_USER,
+                parts=[new_text_part(command)],
                 message_id=uuid4().hex
             )
-            
+            request = SendMessageRequest()
+            request.message.CopyFrom(message)
+
             # 发送消息并收集响应
             responses = []
             final_content = ""
             
-            async for response in client.send_message(message):
+            async for response in client.send_message(request):
                 
                 # 提取实际的文本内容
                 if hasattr(response, 'artifacts') and response.artifacts:
@@ -372,8 +376,7 @@ async def _call_a2a_agent_async(agent_url: str, command: str, timeout: float = 9
             }
             
     except Exception as e:
-        # 简化错误日志，不打印完整堆栈跟踪（避免误导用户）
-        logger.error(f"调用 A2A agent 失败: {str(e)}")
+        logger.error(f"调用 A2A agent 失败: {str(e)}", exc_info=True)
         return {
             "success": False,
             "error": str(e),

@@ -6,10 +6,22 @@
 import sys
 import os
 from pathlib import Path
-import click
+import dotenv
+
+_CURRENT_DIR = Path(__file__).resolve().parent
+_PARENT_DIR = _CURRENT_DIR.parent
+
+# 必须在其他模块导入之前加载 .env，保证模块级环境变量读取正确
+dotenv.load_dotenv(dotenv_path=_CURRENT_DIR / ".env", override=True)
+
+if str(_CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CURRENT_DIR))
+if str(_PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PARENT_DIR))
+
 import logging
 import uvicorn
-import dotenv
+import httpx
 from starlette.applications import Starlette
 from a2a.types import (
     AgentCapabilities,
@@ -22,19 +34,11 @@ from a2a.server.routes import (
     create_agent_card_routes,
     create_jsonrpc_routes,
 )
-import httpx
 from a2a.server.tasks import (
     BasePushNotificationSender,
     InMemoryPushNotificationConfigStore,
     InMemoryTaskStore,
 )
-
-_CURRENT_DIR = Path(__file__).resolve().parent
-_PARENT_DIR = _CURRENT_DIR.parent
-if str(_CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_CURRENT_DIR))
-if str(_PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_PARENT_DIR))
 
 from executor import DataMiningAgentExecutor
 from agent import DataMiningAgent
@@ -42,21 +46,12 @@ from agent import DataMiningAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-dotenv.load_dotenv(dotenv_path=_CURRENT_DIR / ".env", override=True)
 
-
-@click.command()
-@click.option("--host", default=None, help="服务主机地址（默认从 .env 读取 AGENT_DATA_MINING_HOST）")
-@click.option("--port", default=None, type=int, help="服务端口（默认从 .env 读取 AGENT_DATA_MINING_PORT）")
-def main(host=None, port=None):
+def main():
     """Starts the Data Mining Agent server."""
     try:
-        if host is None or port is None:
-            from config_loader import get_config_loader
-            config_loader = get_config_loader(strict_mode=False)
-            default_host, default_port = config_loader.get_agent_host_port('data_mining')
-            host = host or default_host
-            port = port or default_port
+        host = os.getenv("AGENT_DATA_MINING_HOST", "localhost")
+        port = int(os.getenv("AGENT_DATA_MINING_PORT", "12004"))
 
         capabilities = AgentCapabilities(
             push_notifications=False,

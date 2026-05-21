@@ -42,7 +42,7 @@ class DatabaseConnection:
                 port=self.db_config.get("port", 9030),
                 user=self.db_config.get("user", "root"),
                 password=self.db_config.get("password", ""),
-                database=self.db_config.get("database", "smart_home"),
+                database=self.db_config.get("database", "moss_ai"),
                 charset=self.db_config.get("charset", "utf8mb4"),
                 cursorclass=DictCursor,
                 autocommit=True,

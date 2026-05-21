@@ -1,60 +1,125 @@
 from langchain_core.tools import tool
-from miio import DeviceFactory
-from miio.miot_device import MiotDevice
+from miio import Yeelight
 import json
+import os
+import asyncio
+import concurrent.futures
 from pydantic import BaseModel, Field
-import time
 import logging
 import threading
 
-# 配置日志
 logger = logging.getLogger(__name__)
 
-# 设备配置
-LAMP_IP = "192.168.110.122"
-LAMP_TOKEN = "4a90f98aaa1273ca34685d66d6e13958"
-LAMP_MODEL = "yeelink.light.bslamp2"
+DEFAULT_SYSTEM_USER_ID = int(os.getenv("DEFAULT_SYSTEM_USER_ID", "1000000001"))
+DEFAULT_LAMP_NAME = os.getenv("LAMP_DEFAULT_NAME", "床头灯")
 
-try:
-    device = DeviceFactory.create(LAMP_IP, LAMP_TOKEN)
-    logger.info(f"使用 DeviceFactory 创建设备成功: {LAMP_MODEL}")
-except Exception as e:
-    logger.warning(f"DeviceFactory 创建失败，使用 MiotDevice: {e}")
+MCP_GATEWAY_SSE_URL = os.getenv("MCP_GATEWAY_SSE_URL", "http://127.0.0.1:8099/sse")
+MCP_GATEWAY_TOOL = os.getenv("MCP_GATEWAY_PROXY_TOOL", "call_gateway_service_tool")
+MCP_DEVICE_SERVICE = os.getenv("MCP_DEVICE_SERVICE_NAME", "device_query")
 
-# 添加线程锁，确保同一时间只有一个操作
+_device_cache: dict = {}
+_device_instances: dict = {}
+_instance_lock = threading.Lock()
 device_lock = threading.Lock()
+
+
+async def _call_mcp_gateway(tool_name: str, arguments: dict) -> dict | None:
+    """通过 SSE 连接已运行的 MCP 网关调用工具。"""
+    from mcp import ClientSession
+    from mcp.client.sse import sse_client
+
+    gateway_args = {
+        "service_name": MCP_DEVICE_SERVICE,
+        "tool_name": tool_name,
+        "arguments_json": json.dumps(arguments, ensure_ascii=False),
+    }
+    async with sse_client(MCP_GATEWAY_SSE_URL) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool(MCP_GATEWAY_TOOL, arguments=gateway_args)
+
+    text = ""
+    if hasattr(result, "content") and result.content:
+        text = getattr(result.content[0], "text", "") or ""
+    if not text:
+        return None
+
+    gateway_payload = json.loads(text)
+    if not gateway_payload.get("success"):
+        raise RuntimeError(f"MCP 网关返回失败: {gateway_payload.get('message')}")
+
+    wrapped = gateway_payload.get("result", {})
+    parsed = wrapped.get("parsed") if isinstance(wrapped, dict) else None
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except json.JSONDecodeError:
+            pass
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _run_async(coro):
+    """在同步上下文中安全运行异步协程。"""
+    try:
+        asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result(timeout=30)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+def _get_device(device_name: str = DEFAULT_LAMP_NAME, system_user_id: int = DEFAULT_SYSTEM_USER_ID) -> Yeelight:
+    """通过 MCP 网关获取设备配置并返回 Yeelight 设备实例（按 ip:token 缓存）。"""
+    cache_key = f"{system_user_id}_{device_name}"
+
+    if cache_key not in _device_cache:
+        result = _run_async(_call_mcp_gateway(
+            "get_device_by_name",
+            {"system_user_id": system_user_id, "device_name": device_name},
+        ))
+        if not result:
+            raise RuntimeError(f"MCP 网关未返回设备信息: {device_name}")
+        devices = result.get("devices") or []
+        if not devices:
+            raise RuntimeError(f"用户 {system_user_id} 下未找到设备: {device_name}")
+        _device_cache[cache_key] = devices[0]
+        logger.info("通过 MCP 网关获取设备配置成功: ip=%s", devices[0].get("localip"))
+
+    info = _device_cache[cache_key]
+    ip = info.get("localip", "")
+    token = info.get("token", "")
+
+    if not ip or not token:
+        raise RuntimeError(f"设备 {device_name} 配置不完整，缺少 IP 或 Token")
+
+    instance_key = f"{ip}:{token}"
+    with _instance_lock:
+        if instance_key not in _device_instances:
+            _device_instances[instance_key] = Yeelight(ip, token)
+            logger.info("Yeelight 设备实例创建成功: ip=%s", ip)
+    return _device_instances[instance_key]
 
 
 @tool("get_lamp_status", description="获取床头灯当前状态，包括电源、亮度、色温、颜色等信息")
 def get_lamp_status():
     """获取床头灯设备状态并以 JSON 格式返回"""
     try:
-        with device_lock:  # 使用锁确保串行执行
-            # 使用 status() 方法获取 DeviceStatus 对象
-            device_status = device.status()
-            
-            # 构建状态字典
+        device = _get_device()
+        with device_lock:
+            s = device.status()
             status = {
-                "power": device_status.power if hasattr(device_status, 'power') else None,
-                "is_on": device_status.is_on if hasattr(device_status, 'is_on') else None,
-                "brightness": device_status.brightness if hasattr(device_status, 'brightness') else None,
-                "color_temp": device_status.color_temp if hasattr(device_status, 'color_temp') else None,
-                "color_mode": device_status.color_mode if hasattr(device_status, 'color_mode') else None,
-                "rgb": device_status.rgb if hasattr(device_status, 'rgb') else None,
+                "power": s.power.value if hasattr(s, 'power') else None,
+                "is_on": s.is_on if hasattr(s, 'is_on') else None,
+                "brightness": s.brightness if hasattr(s, 'brightness') else None,
+                "color_temp": s.color_temp if hasattr(s, 'color_temp') else None,
+                "color_mode": s.color_mode.value if hasattr(s, 'color_mode') else None,
+                "rgb": str(s.rgb) if hasattr(s, 'rgb') else None,
                 "online": True,
-                "model": LAMP_MODEL
             }
-            
             return json.dumps(status, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"获取床头灯状态失败: {e}")
-        error_status = {
-            "error": f"获取设备状态失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }
-        return json.dumps(error_status, indent=2, ensure_ascii=False)
+        return json.dumps({"error": str(e), "online": False}, indent=2, ensure_ascii=False)
 
 
 class PowerArgs(BaseModel):
@@ -65,26 +130,15 @@ class PowerArgs(BaseModel):
 def set_lamp_power(power: bool):
     """开启或关闭床头灯"""
     try:
-        with device_lock:  # 使用锁确保串行执行
-            if power:
-                result = device.on()
-            else:
-                result = device.off()
+        device = _get_device()
+        with device_lock:
+            result = device.on() if power else device.off()
             action = "开启" if power else "关闭"
             logger.info(f"床头灯已{action}")
-            return json.dumps({
-                "message": f"床头灯已{action}",
-                "power": power,
-                "result": str(result)
-            }, indent=2, ensure_ascii=False)
+            return json.dumps({"message": f"床头灯已{action}", "power": power, "result": str(result)}, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"设置床头灯电源失败: {e}")
-        return json.dumps({
-            "error": f"设置电源状态失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }, indent=2, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, indent=2, ensure_ascii=False)
 
 
 class BrightnessArgs(BaseModel):
@@ -95,23 +149,14 @@ class BrightnessArgs(BaseModel):
 def set_lamp_brightness(brightness: int):
     """设置床头灯亮度"""
     try:
+        device = _get_device()
         with device_lock:
-            # 参考 Iot.py - 设置亮度 (siid=2, piid=2)
-            result = device.send("set_bright", [brightness])
+            result = device.set_brightness(brightness)
             logger.info(f"亮度已设置为{brightness}%")
-            return json.dumps({
-                "message": f"亮度已设置为{brightness}%",
-                "brightness": brightness,
-                "result": str(result)
-            }, indent=2, ensure_ascii=False)
+            return json.dumps({"message": f"亮度已设置为{brightness}%", "brightness": brightness, "result": str(result)}, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"设置床头灯亮度失败: {e}")
-        return json.dumps({
-            "error": f"设置亮度失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }, indent=2, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, indent=2, ensure_ascii=False)
 
 
 class ColorTempArgs(BaseModel):
@@ -122,24 +167,15 @@ class ColorTempArgs(BaseModel):
 def set_lamp_color_temp(color_temp: int):
     """设置床头灯色温"""
     try:
+        device = _get_device()
         with device_lock:
-            result = device.send("set_ct_abx", [color_temp, "smooth", 500])
+            result = device.set_color_temp(color_temp)
             temp_desc = "暖光" if color_temp < 3000 else "中性光" if color_temp < 5000 else "冷光"
             logger.info(f"色温已设置为{color_temp}K ({temp_desc})")
-            return json.dumps({
-                "message": f"色温已设置为{color_temp}K ({temp_desc})",
-                "color_temp": color_temp,
-                "description": temp_desc,
-                "result": str(result)
-            }, indent=2, ensure_ascii=False)
+            return json.dumps({"message": f"色温已设置为{color_temp}K ({temp_desc})", "color_temp": color_temp, "description": temp_desc, "result": str(result)}, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"设置床头灯色温失败: {e}")
-        return json.dumps({
-            "error": f"设置色温失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }, indent=2, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, indent=2, ensure_ascii=False)
 
 
 class ColorArgs(BaseModel):
@@ -152,26 +188,14 @@ class ColorArgs(BaseModel):
 def set_lamp_color(red: int, green: int, blue: int):
     """设置床头灯RGB颜色"""
     try:
+        device = _get_device()
         with device_lock:
-            color_value = (red << 16) | (green << 8) | blue
-            result = device.send("set_rgb", [color_value])
+            result = device.set_rgb((red, green, blue))
             logger.info(f"颜色已设置为 RGB({red}, {green}, {blue})")
-            return json.dumps({
-                "message": f"颜色已设置为 RGB({red}, {green}, {blue})",
-                "red": red,
-                "green": green,
-                "blue": blue,
-                "color_hex": f"#{red:02x}{green:02x}{blue:02x}",
-                "result": str(result)
-            }, indent=2, ensure_ascii=False)
+            return json.dumps({"message": f"颜色已设置为 RGB({red}, {green}, {blue})", "red": red, "green": green, "blue": blue, "color_hex": f"#{red:02x}{green:02x}{blue:02x}", "result": str(result)}, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"设置床头灯颜色失败: {e}")
-        return json.dumps({
-            "error": f"设置颜色失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }, indent=2, ensure_ascii=False)
+        return json.dumps({"error": str(e)}, indent=2, ensure_ascii=False)
 
 
 class SceneArgs(BaseModel):
@@ -181,49 +205,28 @@ class SceneArgs(BaseModel):
 @tool("set_lamp_scene", args_schema=SceneArgs, description="设置床头灯预设场景（阅读/睡眠/浪漫/夜灯）")
 def set_lamp_scene(scene: str):
     """设置床头灯预设场景"""
-    # 定义预设场景
     scenes = {
         "reading": {"brightness": 100, "color_temp": 4000, "desc": "阅读模式：100%亮度，4000K中性光"},
         "sleep": {"brightness": 10, "color_temp": 2000, "desc": "睡眠模式：10%亮度，2000K暖光"},
-        "romantic": {"brightness": 30, "color": (255, 100, 100), "desc": "浪漫模式：30%亮度，粉红色"},
-        "night": {"brightness": 5, "color_temp": 1700, "desc": "夜灯模式：5%亮度，1700K极暖光"}
+        "romantic": {"brightness": 30, "rgb": (255, 100, 100), "desc": "浪漫模式：30%亮度，粉红色"},
+        "night": {"brightness": 5, "color_temp": 1700, "desc": "夜灯模式：5%亮度，1700K极暖光"},
     }
-    
+
     if scene not in scenes:
-        return json.dumps({
-            "error": f"未知场景: {scene}",
-            "available_scenes": list(scenes.keys())
-        }, indent=2, ensure_ascii=False)
-    
+        return json.dumps({"error": f"未知场景: {scene}", "available_scenes": list(scenes.keys())}, indent=2, ensure_ascii=False)
+
     try:
+        device = _get_device()
         with device_lock:
-            scene_config = scenes[scene]
-            
-            # 设置亮度
-            device.set_property_by(2, 2, scene_config["brightness"])
-            time.sleep(0.3)  # 给设备一点响应时间
-            
-            # 设置色温或颜色
-            if "color_temp" in scene_config:
-                device.set_property_by(2, 3, scene_config["color_temp"])
-            elif "color" in scene_config:
-                r, g, b = scene_config["color"]
-                color_value = (r << 16) | (g << 8) | b
-                device.set_property_by(2, 5, color_value)
-            
+            cfg = scenes[scene]
+            device.set_brightness(cfg["brightness"])
+            if "color_temp" in cfg:
+                device.set_color_temp(cfg["color_temp"])
+            elif "rgb" in cfg:
+                r, g, b = cfg["rgb"]
+                device.set_rgb((r, g, b))
             logger.info(f"场景已设置为: {scene}")
-            return json.dumps({
-                "message": f"场景已设置为: {scene}",
-                "scene": scene,
-                "description": scene_config["desc"],
-                "config": scene_config
-            }, indent=2, ensure_ascii=False)
+            return json.dumps({"message": f"场景已设置为: {scene}", "scene": scene, "description": cfg["desc"]}, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"设置床头灯场景失败: {e}")
-        return json.dumps({
-            "error": f"设置场景失败: {str(e)}",
-            "message": "请检查：\n1. 设备是否已开启并连接到网络\n2. 设备IP地址是否配置正确（当前配置：{ip}）\n3. 设备Token是否正确".format(ip=LAMP_IP),
-            "online": False,
-            "model": LAMP_MODEL
-        }, indent=2, ensure_ascii=False)
-
+        return json.dumps({"error": str(e)}, indent=2, ensure_ascii=False)

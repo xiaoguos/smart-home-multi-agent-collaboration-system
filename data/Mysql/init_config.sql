@@ -119,7 +119,7 @@ INSERT INTO system_config (config_key, config_value, config_type, category, desc
 ('cache_ttl', '300', 'int', 'system', '缓存TTL（秒）'),
 ('log_level', 'INFO', 'string', 'logging', '日志级别'),
 ('log_format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s', 'string', 'logging', '日志格式'),
-('log_file', 'logs/smart_home.log', 'string', 'logging', '日志文件路径'),
+('log_file', 'logs/moss_ai.log', 'string', 'logging', '日志文件路径'),
 ('log_max_size', '10MB', 'string', 'logging', '日志文件最大大小'),
 ('log_backup_count', '5', 'int', 'logging', '日志备份数量'),
 ('health_check_enabled', 'true', 'bool', 'monitoring', '健康检查是否启用'),

@@ -6,7 +6,6 @@
 import sys
 import os
 from pathlib import Path
-import click
 import logging
 import uvicorn
 import dotenv
@@ -31,6 +30,10 @@ from a2a.server.tasks import (
 
 _CURRENT_DIR = Path(__file__).resolve().parent
 _PARENT_DIR = _CURRENT_DIR.parent
+
+# 必须在导入 agent/tools 之前加载 .env，确保模块级环境变量正确读取
+dotenv.load_dotenv(dotenv_path=_CURRENT_DIR / ".env", override=True)
+
 if str(_CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(_CURRENT_DIR))
 if str(_PARENT_DIR) not in sys.path:
@@ -42,21 +45,12 @@ from agent import AirConditionerAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-dotenv.load_dotenv(dotenv_path=_CURRENT_DIR / ".env", override=True)
 
-
-@click.command()
-@click.option("--host", default=None, help="服务主机地址（默认从 .env 读取 AGENT_AIR_CONDITIONER_HOST）")
-@click.option("--port", default=None, type=int, help="服务端口（默认从 .env 读取 AGENT_AIR_CONDITIONER_PORT）")
-def main(host=None, port=None):
+def main():
     """Starts the Air Conditioner Agent server."""
     try:
-        if host is None or port is None:
-            from config_loader import get_config_loader
-            config_loader = get_config_loader(strict_mode=False)
-            default_host, default_port = config_loader.get_agent_host_port('air_conditioner')
-            host = host or default_host
-            port = port or default_port
+        host = os.getenv("AGENT_AIR_CONDITIONER_HOST", "localhost")
+        port = int(os.getenv("AGENT_AIR_CONDITIONER_PORT", "12001"))
 
         capabilities = AgentCapabilities(
             push_notifications=False,

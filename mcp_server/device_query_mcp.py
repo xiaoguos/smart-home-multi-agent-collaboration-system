@@ -20,10 +20,32 @@ backend_candidates = [
     project_root / "web" / "backend-python",
     project_root / "app" / "backend-python",
 ]
+_backend_dir: Path | None = None
 for candidate in backend_candidates:
     if candidate.exists():
         sys.path.insert(0, str(candidate))
+        _backend_dir = candidate
         break
+
+# 作为独立子进程运行时，不会继承 backend 的环境变量。
+# 在导入 database 之前先加载 .env，确保 DATABASE_HOST/PORT 等配置正确。
+if _backend_dir is not None:
+    _env_file = _backend_dir / ".env"
+    if _env_file.exists():
+        try:
+            with open(_env_file, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line or _line.startswith("#") or "=" not in _line:
+                        continue
+                    _k, _v = _line.split("=", 1)
+                    _k = _k.strip().lstrip("export").strip()
+                    _v = _v.strip().strip("'\"")
+                    if _k and _k not in os.environ:
+                        os.environ[_k] = _v
+        except Exception:
+            pass
+
 from api.xiaomi_auth import XiaomiCloudConnector
 from database import query, init_database
 
