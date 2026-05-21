@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pymysql
 from pymysql.cursors import DictCursor
 
-import env
+import os
 
 # 全局数据库连接实例
 db = None
@@ -12,36 +12,26 @@ class DatabaseConnectionError(Exception):
     """数据库连接错误"""
     
     def __init__(self, original_error: Exception = None):
-        """
-        初始化数据库连接错误
-        
-        Args:
-            original_error: 原始异常对象（可选）
-        """
         self.original_error = original_error
-        
-        # 构建错误消息
         message = "请检查数据库连接"
         if original_error:
             message = f"{message}: {original_error}"
-        
         super().__init__(message)
         self.message = message
 
 # 数据库连接管理类
 class DatabaseConnection:
-    # 初始化数据库连接
     def __init__(self, strict_mode: bool = True):
         self.strict_mode = strict_mode
         self._connection = None
-        self.db_type = env.DATABASE_TYPE
+        self.db_type = os.getenv("DATABASE_TYPE", "mysql")
         self.db_config = {
-            "host": env.DATABASE_HOST,
-            "port": env.DATABASE_PORT,
-            "user": env.DATABASE_USER,
-            "password": env.DATABASE_PASSWORD,
-            "database": env.DATABASE_NAME,
-            "charset": env.DATABASE_CHARSET,
+            "host": os.getenv("DATABASE_HOST", "localhost"),
+            "port": int(os.getenv("DATABASE_PORT", "3306")),
+            "user": os.getenv("DATABASE_USER", "root"),
+            "password": os.getenv("DATABASE_PASSWORD", ""),
+            "database": os.getenv("DATABASE_NAME", "moss_ai"),
+            "charset": os.getenv("DATABASE_CHARSET", "utf8mb4"),
         }
     
     # 获取数据库连接
@@ -56,7 +46,9 @@ class DatabaseConnection:
                 charset=self.db_config.get("charset", "utf8mb4"),
                 cursorclass=DictCursor,
                 autocommit=True,
-                connect_timeout=5
+                connect_timeout=5,
+                read_timeout=15,
+                write_timeout=15,
             )
             return connection
         except Exception as e:

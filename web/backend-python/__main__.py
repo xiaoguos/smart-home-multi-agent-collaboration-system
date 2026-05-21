@@ -1,14 +1,19 @@
-import uvicorn
+import os
+from pathlib import Path
 
-import env
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+import uvicorn
 
 
 def main() -> None:
     uvicorn.run(
         "app:app",
-        host=env.HOST,
-        port=env.PORT,
-        reload=env.DEBUG,
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", "3000")),
+        reload=os.getenv("DEBUG", "false").lower() in ("1", "true", "yes"),
         log_level="info",
         http="h11",
     )

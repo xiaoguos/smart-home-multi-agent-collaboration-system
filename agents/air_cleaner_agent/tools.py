@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
-from miio import DeviceFactory
 from miio.miot_device import MiotDevice
+from miio.integrations.airpurifier.zhimi.airpurifier_miot import AirPurifierMiot
 import json
 from pydantic import BaseModel, Field
 import logging
@@ -14,8 +14,8 @@ PURIFIER_IP = "192.168.110.120"
 PURIFIER_TOKEN = "569905df67a11d6b67a575097255c798"
 PURIFIER_MODEL = "zhimi.airp.oa1"
 
-# 创建设备实例（使用 DeviceFactory 自动识别设备类型）
-device = DeviceFactory.create(PURIFIER_IP, PURIFIER_TOKEN)
+# 创建设备实例（python-miio 新版本已移除 DeviceFactory，改用 AirPurifierMiot）
+device = AirPurifierMiot(PURIFIER_IP, PURIFIER_TOKEN)
 
 # 同时保留 MiotDevice 实例用于属性设置
 miot_device = MiotDevice(

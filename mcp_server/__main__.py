@@ -1,4 +1,4 @@
-from mcp_gateway_server import main
+from device_query_mcp.main import main
 
 
 if __name__ == "__main__":

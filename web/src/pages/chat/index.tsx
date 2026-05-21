@@ -17,7 +17,7 @@ import remarkGfm from 'remark-gfm';
 import "./chat.sass";
 import { sendChatMessage } from "../../api/chat";
 import { checkBindingStatus } from "../../api/xiaomi";
-import { getAgents, syncAgentDeviceOfflinePolicy, type Agent } from "../../api/config";
+import { getAgents, type Agent } from "../../api/config";
 import {
   getConversationList,
   getConversationHistory,
@@ -94,7 +94,7 @@ const Chat: React.FC = () => {
         return null;
       }
       const user = JSON.parse(userStr);
-      return user.id || null;
+      return typeof user.id === 'number' ? user.id : null;
     } catch (error) {
       console.error('获取用户ID失败:', error);
       return null;
@@ -178,14 +178,6 @@ const Chat: React.FC = () => {
 
   const loadEnabledAgents = async () => {
     try {
-      const userId = getUserId();
-      if (userId) {
-        try {
-          await syncAgentDeviceOfflinePolicy(userId);
-        } catch {
-          // 米家 MCP 不可用时跳过自动禁用策略
-        }
-      }
       const agents = await getAgents(true);
       setEnabledAgents(agents);
 

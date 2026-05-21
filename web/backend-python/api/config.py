@@ -1103,3 +1103,206 @@ async def test_audio_plugin_output(
         logger.exception("测试音频 MCP 输出失败")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==================== Agent 注册（用户手动添加外部 Agent） ====================
+
+class AgentRegisterRequest(BaseModel):
+    """手动注册外部 Agent 的请求体"""
+    url: str = Field(..., description="Agent 服务地址，如 http://localhost:12001")
+    agent_code: Optional[str] = Field(
+        default=None,
+        description="Agent 代码标识（留空时从 AgentCard name 自动推断）",
+    )
+    description: Optional[str] = Field(default=None, description="功能描述（留空时从 AgentCard 取）")
+
+
+class AgentRegisterResponse(BaseModel):
+    """Agent 注册结果"""
+    success: bool
+    agent_code: str
+    agent_name: str
+    url: str
+    host: str
+    port: int
+    description: Optional[str] = None
+    card_fetched: bool = False
+    connectivity: bool = False
+    message: str = ""
+
+
+@router.post("/agents/register", response_model=AgentRegisterResponse)
+async def register_agent(data: AgentRegisterRequest):
+    """
+    手动注册一个外部 Agent 服务。
+
+    流程：
+    1. 访问 {url}/.well-known/agent-card.json 获取 AgentCard
+    2. 测试 POST {url}/ 连通性
+    3. 将 Agent 信息写入 agent_config 表（已存在则更新）
+    4. 返回注册结果
+
+    注册成功后 Conductor Agent 可通过 agent_code 调用该 Agent。
+    """
+    import httpx
+    from urllib.parse import urlparse
+
+    raw_url = data.url.rstrip("/")
+    parsed = urlparse(raw_url)
+    if not parsed.scheme or not parsed.hostname:
+        raise HTTPException(status_code=400, detail=f"无效的 URL: {data.url}")
+
+    host = parsed.hostname
+    port = parsed.port
+    if not port:
+        port = 443 if parsed.scheme == "https" else 80
+
+    # ── 1. 获取 AgentCard ────────────────────────────────────────────────────
+    agent_name = ""
+    description = data.description or ""
+    card_fetched = False
+    card_url = f"{raw_url}/.well-known/agent-card.json"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(card_url)
+            resp.raise_for_status()
+            card = resp.json()
+            agent_name = card.get("name", "")
+            if not description:
+                description = card.get("description", "")
+            card_fetched = True
+            logger.info("✅ 已获取 AgentCard: name=%s url=%s", agent_name, card_url)
+    except Exception as exc:
+        logger.warning("⚠️  获取 AgentCard 失败 (%s): %s", card_url, exc)
+
+    # ── 2. 推断 agent_code ───────────────────────────────────────────────────
+    agent_code = (data.agent_code or "").strip()
+    if not agent_code:
+        # 从 agent_name 推断：去掉 "Agent" 后缀，转 snake_case，去空格
+        raw = (agent_name or parsed.hostname or "unknown").lower()
+        raw = raw.replace(" agent", "").replace(" ", "_").replace("-", "_")
+        import re
+        agent_code = re.sub(r"[^a-z0-9_]", "", raw) or "agent"
+    if not agent_name:
+        agent_name = agent_code.replace("_", " ").title() + " Agent"
+
+    # ── 3. 测试连通性 ────────────────────────────────────────────────────────
+    connectivity = False
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            probe = {
+                "jsonrpc": "2.0",
+                "method": "message/send",
+                "params": {
+                    "message": {
+                        "context_id": "health-check",
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": "ping"}],
+                        "message_id": "probe-001",
+                    }
+                },
+                "id": 1,
+            }
+            r = await client.post(f"{raw_url}/", json=probe, headers={"Content-Type": "application/json"})
+            # 2xx 或 4xx 都算服务在线（服务在线但可能拒绝了请求）
+            connectivity = r.status_code < 500
+    except Exception as exc:
+        logger.warning("⚠️  连通性测试失败 (%s): %s", raw_url, exc)
+
+    # ── 4. 写入 agent_config ─────────────────────────────────────────────────
+    config_service = get_config_service()
+    existing = config_service.get_agent_by_code(agent_code)
+    message = ""
+    try:
+        if existing:
+            config_service.update_agent(
+                existing["id"],
+                {
+                    "agent_name": agent_name,
+                    "host": host,
+                    "port": port,
+                    "description": description,
+                    "is_enabled": True,
+                },
+            )
+            message = f"已更新 Agent 配置: {agent_code}"
+        else:
+            config_service.create_agent(
+                {
+                    "agent_code": agent_code,
+                    "agent_name": agent_name,
+                    "host": host,
+                    "port": port,
+                    "description": description,
+                    "is_enabled": True,
+                }
+            )
+            message = f"已新增 Agent 配置: {agent_code}"
+        logger.info("✅ %s (host=%s port=%s connectivity=%s)", message, host, port, connectivity)
+    except Exception as exc:
+        logger.error("写入 agent_config 失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"写入数据库失败: {exc}")
+
+    return AgentRegisterResponse(
+        success=True,
+        agent_code=agent_code,
+        agent_name=agent_name,
+        url=raw_url,
+        host=host,
+        port=port,
+        description=description or None,
+        card_fetched=card_fetched,
+        connectivity=connectivity,
+        message=message,
+    )
+
+
+@router.get("/agents/registered", response_model=List[AgentRegisterResponse])
+async def list_registered_agents():
+    """
+    列出所有已注册的外部 Agent（不含 conductor，conductor 为内嵌模式）。
+    同时探测每个 Agent 的连通性。
+    """
+    import httpx
+
+    config_service = get_config_service()
+    rows = config_service.get_agents()
+    result = []
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for row in rows:
+            code = row.get("agent_code", "")
+            if code == "conductor":
+                continue
+            host = str(row.get("host") or "localhost")
+            port = int(row.get("port") or 0)
+            url = (
+                host.rstrip("/")
+                if host.startswith("http")
+                else f"http://{host}:{port}"
+            )
+
+            connectivity = False
+            card_fetched = False
+            try:
+                r = await client.get(f"{url}/.well-known/agent-card.json")
+                card_fetched = r.status_code < 400
+                connectivity = r.status_code < 500
+            except Exception:
+                pass
+
+            result.append(
+                AgentRegisterResponse(
+                    success=True,
+                    agent_code=code,
+                    agent_name=str(row.get("agent_name") or code),
+                    url=url,
+                    host=host,
+                    port=port,
+                    description=row.get("description"),
+                    card_fetched=card_fetched,
+                    connectivity=connectivity,
+                    message="在线" if connectivity else "离线",
+                )
+            )
+    return result
+

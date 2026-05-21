@@ -16,9 +16,6 @@ import os
 import time
 import random
 
-# 添加父目录到路径以导入database
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'app', 'backend-python'))
-
 # 设置日志
 logger = logging.getLogger(__name__)
 
@@ -995,16 +992,7 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
 
 def _get_xiaomi_devices_direct(username: str, password: str, server: str = "cn", skip_login: bool = False) -> str:
     """直接获取小米设备信息，不使用 MCP"""
-    import sys
-    import os
-    
     try:
-        # 导入小米设备连接器
-        current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        backend_dir = os.path.join(current_dir, "app", "backend-python")
-        if backend_dir not in sys.path:
-            sys.path.insert(0, backend_dir)
-        
         from api.xiaomi_auth import XiaomiCloudConnector
         
         # 1. 创建连接器
@@ -1126,21 +1114,8 @@ def list_xiaomi_devices(system_user_id: int, server: str = "cn"):
     - 无需用户提供账号密码
     """
     import asyncio
-    import sys
-    import os
-    
+
     try:
-        # 添加后端路径到 sys.path（复用 web/backend-python 下的 mcp_clients）
-        here = os.path.abspath(os.path.dirname(__file__))
-        repo_root = os.path.abspath(os.path.join(here, "..", ".."))
-        for sub in ("web/backend-python", "app/backend-python"):
-            backend_path = os.path.join(repo_root, sub)
-            if os.path.isdir(os.path.join(backend_path, "mcp_clients")):
-                if backend_path not in sys.path:
-                    sys.path.insert(0, backend_path)
-                break
-        
-        # 导入后端的 MCP 设备服务（复用已有代码）
         from mcp_clients.mcp_device_service import get_mcp_device_service
         
         # 获取 MCP 服务实例

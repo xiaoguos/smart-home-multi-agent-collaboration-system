@@ -1,16 +1,18 @@
 import logging
+import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
 current_dir = Path(__file__).parent
+load_dotenv(current_dir / ".env")
+
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
-
-import env
 
 from api.chat import router as chat_router
 from api.config import router as config_router
@@ -21,7 +23,6 @@ from api.conversation import router as conversation_router
 from api.device_operations import router as device_operations_router
 import database
 from database import init_database, DatabaseConnectionError
-from services.agent_runtime_service import AgentRuntimeService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,22 +42,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ 未知错误,请联系开发者解决: {e}")
         sys.exit(1)
 
-    if database.db is not None:
-        try:
-            summary = AgentRuntimeService(database.db).sync_runtimes_with_agent_config()
-            logger.info(
-                "✅ 已按 agent_config.is_enabled 同步本地 Agent 进程: stopped=%s started=%s errors=%s",
-                summary.get("stopped"),
-                summary.get("started"),
-                len(summary.get("errors") or []),
-            )
-        except Exception as e:
-            logger.warning(
-                "启动时未能将 Agent 进程与配置对齐（可在保存 Agent 或重启后重试）: %s",
-                e,
-                exc_info=True,
-            )
-
     yield
     logger.info("👋 Moss AI 后端服务关闭")
 
@@ -71,7 +56,8 @@ app = FastAPI(
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=env.CORS_ORIGINS,
+    allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip()]
+    or ["http://localhost:1420", "http://127.0.0.1:1420", "http://localhost:3000", "http://127.0.0.1:3000", "tauri://localhost"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

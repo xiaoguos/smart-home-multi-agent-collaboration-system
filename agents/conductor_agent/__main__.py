@@ -4,17 +4,24 @@
 """
 
 import sys
+import os
 from pathlib import Path
 import click
 import logging
 import uvicorn
+import dotenv
+from starlette.applications import Starlette
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
+    AgentInterface,
     AgentSkill,
 )
-from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import (
+    create_agent_card_routes,
+    create_jsonrpc_routes,
+)
 import httpx
 from a2a.server.tasks import (
     BasePushNotificationSender,
@@ -23,12 +30,12 @@ from a2a.server.tasks import (
 )
 
 # 确保当前目录和父目录在 Python 路径中
-current_dir = Path(__file__).parent
-parent_dir = current_dir.parent
-if str(current_dir) not in sys.path:
-    sys.path.insert(0, str(current_dir))
-if str(parent_dir) not in sys.path:
-    sys.path.insert(0, str(parent_dir))
+_CURRENT_DIR = Path(__file__).resolve().parent
+_PARENT_DIR = _CURRENT_DIR.parent
+if str(_CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CURRENT_DIR))
+if str(_PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PARENT_DIR))
 
 from executor import ConductorAgentExecutor
 from agent import ConductorAgent
@@ -36,25 +43,25 @@ from agent import ConductorAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+dotenv.load_dotenv(dotenv_path=_CURRENT_DIR / ".env", override=True)
+
 
 @click.command()
-@click.option("--host", "host", default=None, help="服务主机地址（默认从 .env/config.yaml 读取）")
-@click.option("--port", "port", default=None, type=int, help="服务端口（默认从 .env/config.yaml 读取）")
-@click.option("--debug", "debug_mode", is_flag=True, default=False, help="启用 debug 模式（兼容 PyCharm debugger）")
-def main(host, port, debug_mode):
+@click.option("--host", default=None, help="服务主机地址（默认从 .env 读取 AGENT_CONDUCTOR_HOST）")
+@click.option("--port", default=None, type=int, help="服务端口（默认从 .env 读取 AGENT_CONDUCTOR_PORT）")
+@click.option("--debug", "debug_mode", is_flag=True, default=False, help="启用 debug 模式")
+def main(host=None, port=None, debug_mode=False):
     """Starts the Conductor Agent server."""
     try:
-        # 从配置文件读取 host 和 port（如果命令行未指定）
         if host is None or port is None:
             from config_loader import get_config_loader
             config_loader = get_config_loader(strict_mode=False)
-            default_host,             default_port = config_loader.get_agent_host_port('conductor')
+            default_host, default_port = config_loader.get_agent_host_port('conductor')
             host = host or default_host
             port = port or default_port
-        
+
         capabilities = AgentCapabilities(
             push_notifications=False,
-            state_transition_history=False,
             streaming=False,
         )
         skill = AgentSkill(
@@ -74,15 +81,20 @@ def main(host, port, debug_mode):
         agent_card = AgentCard(
             name="Conductor Agent",
             description="智能家居总管理助手，负责协调和管理所有智能设备代理",
-            url=f"http://{host}:{port}/",
             version="1.0.0",
             default_input_modes=ConductorAgent.SUPPORTED_CONTENT_TYPES,
             default_output_modes=ConductorAgent.SUPPORTED_CONTENT_TYPES,
             capabilities=capabilities,
+            supported_interfaces=[
+                AgentInterface(
+                    protocol_binding="JSONRPC",
+                    protocol_version="1.0",
+                    url=f"http://{host}:{port}/",
+                )
+            ],
             skills=[skill],
         )
 
-        # --8<-- [start:DefaultRequestHandler]
         httpx_client = httpx.AsyncClient()
         push_config_store = InMemoryPushNotificationConfigStore()
         push_sender = BasePushNotificationSender(
@@ -91,31 +103,22 @@ def main(host, port, debug_mode):
         request_handler = DefaultRequestHandler(
             agent_executor=ConductorAgentExecutor(),
             task_store=InMemoryTaskStore(),
+            agent_card=agent_card,
             push_config_store=push_config_store,
             push_sender=push_sender,
         )
-        server = A2AStarletteApplication(
-            agent_card=agent_card, http_handler=request_handler
-        )
+        routes = []
+        routes.extend(create_agent_card_routes(agent_card))
+        routes.extend(create_jsonrpc_routes(request_handler, "/"))
+        app = Starlette(routes=routes)
 
-        # 检测是否在 PyCharm debugger 中运行
-        is_debugging = sys.gettrace() is not None or debug_mode
-        
-        if is_debugging:
-            # PyCharm Debug 模式：使用兼容的方式启动
+        if debug_mode or sys.gettrace() is not None:
             import asyncio
-            config = uvicorn.Config(
-                server.build(), 
-                host=host, 
-                port=port,
-                log_level="info"
-            )
+            config = uvicorn.Config(app, host=host, port=port, log_level="info")
             server_instance = uvicorn.Server(config)
             asyncio.run(server_instance.serve())
         else:
-            # 正常模式：使用标准方式
-            uvicorn.run(server.build(), host=host, port=port)
-        # --8<-- [end:DefaultRequestHandler]
+            uvicorn.run(app, host=host, port=port)
 
     except Exception as e:
         logger.error(f"An error occurred during server startup: {e}")

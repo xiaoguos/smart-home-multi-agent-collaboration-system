@@ -4,9 +4,9 @@ MCP Gateway Server
 Expose a unified MCP server that can proxy calls to other MCP services.
 
 Default downstream services:
-- device_query: mcp/device_query_mcp.py
-- dida_todolist: mcp/didatodolist-mcp/main.py
-- wechat: mcp/mcp_server_wechat/mcp_server_wechat/__main__.py
+- device_query: mcp_server/device_query_mcp.py
+- dida_todolist: mcp_server/didatodolist-mcp/main.py
+- wechat: mcp_server/mcp_server_wechat/mcp_server_wechat/__main__.py
 
 Optional environment overrides:
 - MCP_GATEWAY_PYTHON: python executable path
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP("MCP Gateway", version="1.0.0")
 
-MCP_DIR = Path(__file__).resolve().parent
+MCP_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = MCP_DIR.parent
 
 

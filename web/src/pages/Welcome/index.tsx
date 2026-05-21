@@ -43,7 +43,7 @@ function buildDevMockUser(partial: {
   nickname?: string;
 }): UserInfo {
   return {
-    id: 0,
+    id: 1,
     username: partial.username,
     nickname: partial.nickname ?? partial.username,
     created_at: new Date().toISOString(),
