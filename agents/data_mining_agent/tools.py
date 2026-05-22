@@ -311,7 +311,7 @@ class SceneQueryArgs(BaseModel):
         description="用户的场景描述或查询，例如：'我要睡觉了'、'起床了'、'打开空调'",
     )
     system_user_id: int = Field(
-        default=1, description="系统用户ID，用于查询该用户的历史数据"
+        default=1000000001, description="系统用户ID，用于查询该用户的历史数据"
     )
     days: int = Field(default=30, description="查询最近N天的数据，默认30天")
 
@@ -322,7 +322,7 @@ class SceneQueryArgs(BaseModel):
     description="基于用户历史行为数据，使用GMM算法分析场景习惯，为用户查询提供个性化设备操作建议",
 )
 def query_user_scene_habits(
-    user_query: str, system_user_id: int = 1, days: int = 30
+    user_query: str, system_user_id: int = 1000000001, days: int = 30
 ) -> str:
     """
     查询用户场景习惯，使用GMM进行场景聚类分析
@@ -1042,7 +1042,7 @@ class FeedbackArgs(BaseModel):
     user_modification: Dict[str, Any] = Field(
         ..., description="用户修改后的内容（JSON）"
     )
-    system_user_id: int = Field(default=1, description="系统用户ID")
+    system_user_id: int = Field(default=1000000001, description="系统用户ID")
 
 
 @tool(
@@ -1054,7 +1054,7 @@ def submit_user_feedback(
     context_id: str,
     original_recommendation: Dict[str, Any],
     user_modification: Dict[str, Any],
-    system_user_id: int = 1,
+    system_user_id: int = 1000000001,
 ) -> str:
     """
     提交用户反馈，用于在线学习

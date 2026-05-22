@@ -910,12 +910,12 @@ def get_user_insights(user_id: str = "default_user"):
 
 class DataMiningQueryArgs(BaseModel):
     query: str = Field(..., description="给数据挖掘代理的查询内容，如'我要睡觉了'、'分析我对空调的偏好'等")
-    user_id: str = Field(default="default_user", description="用户ID")
+    user_id: int = Field(default=1000000001, description="系统用户ID，从消息前缀 [SYSTEM_USER_ID:xxx] 中提取，默认为1000000001")
 
 
 @tool("query_data_mining_agent", args_schema=DataMiningQueryArgs, 
      description="调用数据挖掘代理分析用户场景和习惯。当用户描述场景（如'我睡觉了'）或需要个性化建议时使用此工具")
-def query_data_mining_agent(query: str, user_id: str = "default_user"):
+def query_data_mining_agent(query: str, user_id: int = 1000000001):
     """
     调用数据挖掘代理，进行场景识别和习惯分析
     
@@ -942,8 +942,8 @@ def query_data_mining_agent(query: str, user_id: str = "default_user"):
         
         agent_url = agent_config["url"]
         
-        # 构建完整的查询
-        full_query = f"{query} (用户ID: {user_id})"
+        # 构建完整的查询，携带用户ID供 data_mining_agent 提取
+        full_query = f"[SYSTEM_USER_ID:{user_id}] {query}"
         
         # 调用数据挖掘代理
         result = call_a2a_agent(agent_url, full_query, timeout=90.0)
