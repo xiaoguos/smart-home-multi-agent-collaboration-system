@@ -11,7 +11,6 @@ import {
   Modal,
   Tag,
   Space,
-  Typography,
   Popover,
 } from "antd";
 import React, { useState, useEffect } from "react";
@@ -40,7 +39,6 @@ import {
   startAgentRuntime,
   stopAgentRuntime,
   updateAgentModelBinding,
-  getLocalIpv4,
   getAgentPluginsBundle,
   replaceAgentPlugins,
   syncAgentRuntimesWithConfig,
@@ -53,7 +51,6 @@ import {
 } from "../../../api/config";
 import { getXiaomiDevices, type XiaomiDevice } from "../../../api/xiaomi";
 
-const { Text } = Typography;
 
 const AgentConnections: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -73,7 +70,6 @@ const AgentConnections: React.FC = () => {
   const [deviceForm] = Form.useForm();
   const [prompts, setPrompts] = useState<Record<string, string>>({});
   const [activeModels, setActiveModels] = useState<AIModel[]>([]);
-  const [lanIpv4, setLanIpv4] = useState<string>("");
   const [pluginCatalog, setPluginCatalog] = useState<AgentPluginCatalogItem[]>([]);
 
   const resolveUserId = (): number | null => {
@@ -134,24 +130,6 @@ const AgentConnections: React.FC = () => {
   useEffect(() => {
     void load();
   }, []);
-
-  useEffect(() => {
-    void getLocalIpv4()
-      .then((r) => setLanIpv4(String(r?.ipv4 ?? "").trim()))
-      .catch(() => setLanIpv4(""));
-  }, []);
-
-  const isLoopbackServiceHost = (h: string): boolean => {
-    const n = String(h || "").trim().toLowerCase();
-    return (
-      !n ||
-      n === "localhost" ||
-      n === "0.0.0.0" ||
-      n === "127.0.0.1" ||
-      n === "::" ||
-      n === "::1"
-    );
-  };
 
   const openConnectionCreate = () => {
     setCreatingAgent(true);
@@ -428,18 +406,6 @@ const AgentConnections: React.FC = () => {
   const columns = [
     { title: "名称", dataIndex: "agent_name", key: "agent_name" },
     {
-      title: "主机",
-      dataIndex: "host",
-      key: "host",
-      render: (host: string) => {
-        const normalized = String(host || "").trim().toLowerCase();
-        if (!normalized || normalized === "localhost") return "127.0.0.1";
-        if (normalized === "0.0.0.0") return "127.0.0.1";
-        return host;
-      },
-    },
-    { title: "端口", dataIndex: "port", key: "port" },
-    {
       title: "描述",
       dataIndex: "description",
       key: "description",
@@ -492,31 +458,6 @@ const AgentConnections: React.FC = () => {
       render: (val: boolean) => (val ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag>),
     },
     {
-      title: "运行状态",
-      key: "runtime_status",
-      render: (_: unknown, record: Agent) => {
-        const runtimeStatus = (record.runtime_status || "stopped").toLowerCase();
-        if (runtimeStatus === "running") {
-          return <Tag color="success">运行中 PID:{record.runtime_pid || "-"}</Tag>;
-        }
-        if (runtimeStatus === "starting") {
-          return <Tag color="processing">启动中 PID:{record.runtime_pid || "-"}</Tag>;
-        }
-        return <Tag>已停止</Tag>;
-      },
-    },
-    {
-      title: "服务地址",
-      key: "runtime_addr",
-      render: (_: unknown, record: Agent) => {
-        const rawHost = String(record.runtime_server_ip || record.host || "").trim();
-        const displayHost = isLoopbackServiceHost(rawHost)
-          ? lanIpv4 || "127.0.0.1"
-          : rawHost;
-        return <Text code>{`${displayHost}:${record.runtime_port || record.port}`}</Text>;
-      },
-    },
-    {
       title: "绑定模型",
       key: "model_name",
       render: (_: unknown, record: Agent) =>
@@ -561,7 +502,7 @@ const AgentConnections: React.FC = () => {
           <Button
             type="link"
             danger
-            disabled={record.agent_code === "conductor"}
+            disabled={record.agent_code === "conductor" || record.agent_code === "data_mining"}
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteAgent(record)}
           >

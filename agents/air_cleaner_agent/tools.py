@@ -8,11 +8,23 @@ import concurrent.futures
 from pydantic import BaseModel, Field
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from uuid import uuid4
+import httpx
+from a2a.client import ClientFactory, A2ACardResolver
+from a2a.types import Message, Role
+from a2a.helpers import new_text_part
+from a2a.client.client import ClientConfig
+from a2a.client.base_client import SendMessageRequest
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SYSTEM_USER_ID = int(os.getenv("DEFAULT_SYSTEM_USER_ID", "1000000001"))
 DEFAULT_PURIFIER_NAME = os.getenv("PURIFIER_DEFAULT_NAME", "空气净化器")
+DATA_MINING_URL = os.getenv("DATA_MINING_URL", "")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000")
+
+_dm_executor = ThreadPoolExecutor(max_workers=2)
 
 MCP_GATEWAY_SSE_URL = os.getenv("MCP_GATEWAY_SSE_URL", "http://127.0.0.1:8099/sse")
 MCP_GATEWAY_TOOL = os.getenv("MCP_GATEWAY_PROXY_TOOL", "call_gateway_service_tool")
@@ -67,6 +79,148 @@ def _run_async(coro):
             return pool.submit(asyncio.run, coro).result(timeout=30)
     except RuntimeError:
         return asyncio.run(coro)
+
+
+async def _call_data_mining_async(query: str, timeout: float = 30.0) -> dict:
+    """通过 A2A 协议向数据挖掘Agent查询用户偏好。"""
+    if not DATA_MINING_URL:
+        return {"success": False, "error": "DATA_MINING_URL 未配置"}
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resolver = A2ACardResolver(httpx_client=client, base_url=DATA_MINING_URL)
+            agent_card = await resolver.get_agent_card()
+            config = ClientConfig(
+                streaming=False,
+                polling=False,
+                httpx_client=client,
+                supported_protocol_bindings=["JSONRPC"],
+                use_client_preference=False,
+                accepted_output_modes=["text", "text/plain"],
+            )
+            factory = ClientFactory(config=config)
+            a2a_client = factory.create(card=agent_card)
+            message = Message(
+                context_id=str(uuid4()),
+                role=Role.ROLE_USER,
+                parts=[new_text_part(query)],
+                message_id=uuid4().hex,
+            )
+            request = SendMessageRequest()
+            request.message.CopyFrom(message)
+            final_content = ""
+            async for response in a2a_client.send_message(request):
+                if hasattr(response, "artifacts") and response.artifacts:
+                    for artifact in response.artifacts:
+                        if hasattr(artifact, "parts"):
+                            for part in artifact.parts:
+                                if hasattr(part, "root") and hasattr(part.root, "text"):
+                                    final_content = part.root.text
+                if not final_content and hasattr(response, "message"):
+                    msg = response.message
+                    if hasattr(msg, "parts") and msg.parts:
+                        for part in msg.parts:
+                            if hasattr(part, "text"):
+                                final_content = part.text
+                            elif hasattr(part, "root") and hasattr(part.root, "text"):
+                                final_content = part.root.text
+            return {"success": True, "content": final_content}
+    except Exception as e:
+        logger.error("调用数据挖掘Agent失败: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+def _run_data_mining(query: str, timeout: float = 30.0) -> dict:
+    """在独立线程中运行数据挖掘A2A调用，避免事件循环冲突。"""
+    def run_in_new_loop():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_call_data_mining_async(query, timeout))
+        finally:
+            loop.close()
+
+    future = _dm_executor.submit(run_in_new_loop)
+    return future.result(timeout=timeout + 5)
+
+
+class UserPurifierPrefsArgs(BaseModel):
+    scene: str = Field(..., description="场景描述，如：睡觉、起床、回家、做饭、运动等")
+    user_id: int = Field(default=DEFAULT_SYSTEM_USER_ID, description="系统用户ID")
+
+
+@tool("query_user_purifier_preferences", args_schema=UserPurifierPrefsArgs, description="查询用户在指定场景下的空气净化器使用习惯，获取个性化模式、风扇等级等参数建议")
+def query_user_purifier_preferences(scene: str, user_id: int = DEFAULT_SYSTEM_USER_ID) -> str:
+    """向数据挖掘Agent查询用户的空气净化器习惯偏好，用于个性化控制"""
+    if not DATA_MINING_URL:
+        return json.dumps({
+            "available": False,
+            "message": "数据挖掘服务未配置，将使用默认参数",
+        }, ensure_ascii=False)
+
+    query = f"查询用户在'{scene}'场景下的空气净化器使用习惯，包括工作模式和风扇等级偏好 (用户ID: {user_id})"
+    try:
+        result = _run_data_mining(query)
+        if result.get("success"):
+            content = result.get("content", "")
+            return content if content else json.dumps({"available": False, "message": "暂无该场景的历史数据"}, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "available": False,
+                "message": f"数据挖掘查询失败: {result.get('error')}",
+                "fallback": "将使用默认参数",
+            }, ensure_ascii=False)
+    except Exception as e:
+        logger.error("query_user_purifier_preferences 异常: %s", e)
+        return json.dumps({"available": False, "message": str(e)}, ensure_ascii=False)
+
+
+class RecordPurifierOperationArgs(BaseModel):
+    action: str = Field(..., description="执行的操作，如：turn_on, turn_off, set_mode, set_fan_level")
+    parameters: dict = Field(default_factory=dict, description="操作参数，如 {mode: 0} 或 {fan_level: 2}")
+    success: bool = Field(..., description="操作是否成功")
+    response: str = Field(default="", description="操作响应描述")
+    error_message: str = Field(default="", description="失败时的错误信息")
+    execution_time: int = Field(default=0, description="执行耗时（毫秒）")
+    user_id: int = Field(default=DEFAULT_SYSTEM_USER_ID, description="系统用户ID")
+    context_id: str = Field(default="", description="会话上下文ID")
+
+
+@tool("record_device_operation", args_schema=RecordPurifierOperationArgs, description="将空气净化器操作记录到数据库，每次成功控制设备后必须调用此工具记录操作，以便系统学习用户习惯")
+def record_device_operation(
+    action: str,
+    parameters: dict,
+    success: bool,
+    response: str = "",
+    error_message: str = "",
+    execution_time: int = 0,
+    user_id: int = DEFAULT_SYSTEM_USER_ID,
+    context_id: str = "",
+) -> str:
+    """将设备操作记录上报到后端数据库，供数据挖掘Agent学习用户习惯"""
+    try:
+        payload = {
+            "system_user_id": user_id,
+            "context_id": context_id or None,
+            "device_type": "air_cleaner",
+            "device_name": DEFAULT_PURIFIER_NAME,
+            "action": action,
+            "parameters": parameters,
+            "success": success,
+            "response": response or None,
+            "error_message": error_message or None,
+            "execution_time": execution_time or None,
+        }
+        resp = httpx.post(
+            f"{BACKEND_URL}/api/device_operations/save",
+            json=payload,
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        logger.info("操作记录已上报: action=%s, success=%s", action, success)
+        return json.dumps({"recorded": True, "action": action}, ensure_ascii=False)
+    except Exception as e:
+        logger.warning("操作记录上报失败（不影响设备控制）: %s", e)
+        return json.dumps({"recorded": False, "error": str(e)}, ensure_ascii=False)
 
 
 def _get_device_instances(device_name: str = DEFAULT_PURIFIER_NAME, system_user_id: int = DEFAULT_SYSTEM_USER_ID) -> tuple[AirPurifierMiot, MiotDevice]:

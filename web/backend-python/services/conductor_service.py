@@ -85,23 +85,17 @@ class ConductorService:
         return f"msg-{uuid4().hex[:16]}"
     
     def _build_a2a_request(self, user_message: str, system_user_id: int, context_id: str) -> Dict[str, Any]:
-        """构建 A2A 协议请求"""
-        # 在消息中注入用户ID，让 Agent 知道当前用户
+        """构建 A2A 协议请求（a2a-sdk 1.x 格式）"""
         message_with_user_id = f"[SYSTEM_USER_ID:{system_user_id}] {user_message}"
         
         return {
             "jsonrpc": "2.0",
-            "method": "message/send",
+            "method": "SendMessage",
             "params": {
                 "message": {
                     "context_id": context_id,
-                    "role": "user",
-                    "parts": [
-                        {
-                            "kind": "text",
-                            "text": message_with_user_id
-                        }
-                    ],
+                    "role": "ROLE_USER",
+                    "parts": [{"text": message_with_user_id}],
                     "message_id": self._generate_message_id()
                 }
             },
@@ -171,16 +165,30 @@ class ConductorService:
             tuple[str, str, bool]: (content, status, is_error)
         """
         try:
+            # 先检测 JSON-RPC 错误响应（result 字段缺失时说明是 error 响应）
+            if "error" in response and "result" not in response:
+                rpc_error = response["error"]
+                code = rpc_error.get("code", "?")
+                message = rpc_error.get("message", "未知错误")
+                logger.error("❌ Agent 返回 JSON-RPC 错误: code=%s, message=%s", code, message)
+                return f"❌ Agent 通信错误 ({code}): {message}", "failed", True
+
             result = response.get("result", {})
 
-            status = result.get("status", {})
-            state = status.get("state", "")
+            # a2a-sdk 1.x：任务嵌套在 result.task 下；v0.3：直接在 result 下
+            task_data = result.get("task") if isinstance(result.get("task"), dict) else None
+            effective = task_data if task_data is not None else result
+
+            status = effective.get("status", {})
+            raw_state = status.get("state", "")
+            # 兼容 v1.x（TASK_STATE_COMPLETED）和 v0.3（completed）
+            state = raw_state.lower().replace("task_state_", "")
 
             if state == "failed":
                 error_msg = "❌ 任务执行失败"
-                history = result.get("history", [])
+                history = effective.get("history", [])
                 for item in reversed(history):
-                    if item.get("role") == "agent":
+                    if item.get("role") in ("agent", "ROLE_AGENT"):
                         for part in item.get("parts", []):
                             text = self._extract_text_from_part(part)
                             if text and ("错误" in text or "失败" in text or "error" in text.lower()):
@@ -189,7 +197,7 @@ class ConductorService:
                 return error_msg, "failed", True
 
             # 1. 从 artifacts 提取
-            artifacts = result.get("artifacts", [])
+            artifacts = effective.get("artifacts", [])
             if artifacts:
                 contents = []
                 for artifact in artifacts:
@@ -201,10 +209,10 @@ class ConductorService:
                     return "\n\n".join(contents), "success", False
 
             # 2. 从 history 提取 agent 回复
-            history = result.get("history", [])
+            history = effective.get("history", [])
             agent_messages = []
             for item in history:
-                if item.get("role") == "agent":
+                if item.get("role") in ("agent", "ROLE_AGENT"):
                     for part in item.get("parts", []):
                         text = self._extract_text_from_part(part)
                         if text:
@@ -340,7 +348,7 @@ class ConductorService:
                 response = await client.post(
                     f"{target_base_url}/",
                     json=request_data,
-                    headers={"Content-Type": "application/json"},
+                    headers={"Content-Type": "application/json", "A2A-Version": "1.0"},
                 )
                 response.raise_for_status()
                 response_data = response.json()
@@ -351,8 +359,10 @@ class ConductorService:
 
             content, msg_status, is_error = self._extract_content_from_response(response_data)
             result = response_data.get("result", {})
-            task_id = result.get("id")
-            response_context_id = result.get("contextId", context_id)
+            # 兼容 v1.x（result.task）和 v0.3（result 直接含 id/contextId）
+            task_data = result.get("task") if isinstance(result.get("task"), dict) else result
+            task_id = task_data.get("id")
+            response_context_id = task_data.get("contextId") or task_data.get("context_id") or context_id
 
             await self._save_operation_record_if_present(content, system_user_id, response_context_id)
             await chat_history_service.save_message(

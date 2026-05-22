@@ -320,6 +320,28 @@ class AgentRuntimeService:
         command, cwd = self._resolve_launch_command(normalized, host, port)
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
+
+        # 将数据挖掘Agent地址注入子Agent进程，使其可以独立查询用户偏好
+        try:
+            dm_rows = self.db.execute_query(
+                "SELECT host, port FROM agent_config WHERE agent_code='data_mining' AND is_enabled=1 LIMIT 1"
+            )
+            if dm_rows:
+                dm = dm_rows[0]
+                dm_host = str(dm.get("host") or "localhost").strip()
+                dm_port = str(dm.get("port") or "12003").strip()
+                dm_url = dm_host if dm_host.startswith("http") else f"http://{dm_host}:{dm_port}"
+                env["DATA_MINING_URL"] = dm_url
+                logger.info("已向 %s 注入数据挖掘Agent地址: %s", normalized, dm_url)
+        except Exception as exc:
+            logger.warning("获取数据挖掘Agent地址失败（可选功能，子Agent将跳过偏好查询）: %s", exc)
+
+        # 注入后端API地址，子Agent可调用接口录入设备操作记录（供数据挖掘使用）
+        backend_host = os.environ.get("HOST", "localhost")
+        backend_port = os.environ.get("PORT", "3000")
+        if backend_host in ("0.0.0.0", ""):
+            backend_host = "localhost"
+        env.setdefault("BACKEND_URL", f"http://{backend_host}:{backend_port}")
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
 
         try:

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigService:
     """配置管理服务类"""
-    RESERVED_AGENT_CODES = {"conductor"}
+    RESERVED_AGENT_CODES = {"conductor", "data_mining"}
     PLUGIN_MODE_KEYS = {
         "xiaomi": ("plugin.xiaomi.mode", "小米插件模式（enabled/disabled/unused）"),
         "dida": ("plugin.dida.mode", "滴答插件模式（enabled/disabled/unused）"),
@@ -342,24 +342,28 @@ class ConfigService:
         rows = self.db.execute_query(sql, tuple(unique_ids))
         return {int(row["id"]): str(row["model_name"]) for row in rows}
     
-    def get_agents(self, is_enabled: Optional[bool] = None) -> List[Dict[str, Any]]:
+    def get_agents(self, is_enabled: Optional[bool] = None, for_chat: bool = False) -> List[Dict[str, Any]]:
         """
         获取Agent配置列表
-        
+
         Args:
             is_enabled: 是否只获取启用的Agent
-            
+            for_chat: 为 True 时包含主 Agent（conductor），且 conductor 排在列表最前面
+
         Returns:
             Agent配置列表
         """
-        sql = "SELECT * FROM agent_config"
+        if for_chat:
+            sql = "SELECT * FROM agent_config WHERE 1=1"
+        else:
+            sql = "SELECT * FROM agent_config WHERE agent_code != 'conductor'"
         params = None
-        
+
         if is_enabled is not None:
-            sql += " WHERE is_enabled = %s"
+            sql += " AND is_enabled = %s"
             params = (is_enabled,)
-        
-        sql += " ORDER BY id ASC"
+
+        sql += " ORDER BY CASE WHEN agent_code = 'conductor' THEN 0 ELSE 1 END, id ASC"
         agents = self.db.execute_query(sql, params)
 
         # 附加每个Agent当前绑定模型信息（无绑定则为None，表示跟随默认模型）

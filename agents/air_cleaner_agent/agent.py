@@ -18,7 +18,9 @@ from tools import (
     set_purifier_fan_level,
     set_purifier_led,
     set_purifier_alarm,
-    set_purifier_child_lock
+    set_purifier_child_lock,
+    query_user_purifier_preferences,
+    record_device_operation,
 )
 from skills_catalog import format_skills_for_llm, user_message_skill_prefix
 
@@ -48,6 +50,17 @@ class AirPurifierAgent:
         "你是一个桌面空气净化器控制助手。"
         "你只能处理空气净化器相关请求，例如状态查询、电源、模式、风扇、LED、提示音和童锁。"
         "如果用户问题与空气净化器无关，请礼貌拒绝并引导回相关操作。"
+        "\n\n## 个性化偏好查询（重要）"
+        "当用户以场景或意图描述需求（如'睡觉了'、'起床了'、'回家了'、'做饭中'），"
+        "且未明确给出工作模式或风扇等级数值时，必须先调用 query_user_purifier_preferences(scene=场景描述) "
+        "获取该用户的历史习惯偏好，再按偏好结果决策参数。"
+        "若数据挖掘返回 available=false 或无历史数据，则使用默认的自动模式(mode=0)。"
+        "\n\n## 操作记录（重要）"
+        "每次成功执行设备控制后（开关机、设置模式、调整风扇等级），"
+        "必须调用 record_device_operation 工具将本次操作记录到数据库，"
+        "参数包括：action（操作名）、parameters（参数字典）、success=true、response（结果描述）。"
+        "此记录是系统学习用户习惯的数据来源，不可省略。"
+        "若设备操作失败，也应以 success=false 和 error_message 记录失败原因。"
     )
 
     def __init__(self):
@@ -61,7 +74,9 @@ class AirPurifierAgent:
             set_purifier_fan_level,
             set_purifier_led,
             set_purifier_alarm,
-            set_purifier_child_lock
+            set_purifier_child_lock,
+            query_user_purifier_preferences,
+            record_device_operation,
         ]
 
         self._refresh_runtime_config(force=True)
@@ -143,30 +158,25 @@ class AirPurifierAgent:
         current_state = self.graph.get_state(config)
         messages = current_state.values.get('messages') if hasattr(current_state, 'values') else None
 
-        if isinstance(messages, list) and messages:
-            for msg in reversed(messages):
-                if isinstance(msg, ToolMessage):
-                    tool_text = self._extract_text_from_message(msg)
-                    if tool_text:
-                        return {
-                            'is_task_complete': True,
-                            'require_user_input': False,
-                            'content': tool_text,
-                        }
-
-        final_text = ''
-        if isinstance(messages, list) and messages:
-            final_text = self._extract_text_from_message(messages[-1])
-
-        if not final_text:
+        if not isinstance(messages, list) or not messages:
             return {
                 'is_task_complete': False,
                 'require_user_input': True,
                 'content': '当前无法处理您的请求，请稍后重试。',
             }
 
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                text = self._extract_text_from_message(msg)
+                if text:
+                    return {
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': text,
+                    }
+
         return {
-            'is_task_complete': True,
-            'require_user_input': False,
-            'content': final_text,
+            'is_task_complete': False,
+            'require_user_input': True,
+            'content': '当前无法处理您的请求，请稍后重试。',
         }

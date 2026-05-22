@@ -17,7 +17,9 @@ from tools import (
     set_lamp_brightness,
     set_lamp_color_temp,
     set_lamp_color,
-    set_lamp_scene
+    set_lamp_scene,
+    query_user_lamp_preferences,
+    record_device_operation,
 )
 
 memory = MemorySaver()
@@ -50,8 +52,12 @@ class BedsideLampAgent:
         '如果用户询问与床头灯控制无关的内容，'
         '请礼貌地说明你无法帮助处理该主题，只能协助处理与床头灯相关的问题。'
         '不要尝试回答无关问题或将工具用于其他目的。'
-        ''
-        '工具使用指南：'
+        '\n\n## 个性化偏好查询（重要）'
+        '当用户以场景或意图描述需求（如"睡觉了"、"准备睡觉"、"要阅读"、"起床"、"浪漫一点"），'
+        '且未明确给出亮度/色温具体数值时，必须先调用 query_user_lamp_preferences(scene=场景描述) '
+        '获取该用户的历史习惯偏好，再按偏好结果设置参数。'
+        '若数据挖掘返回 available=false 或无历史数据，则使用下方默认参数。'
+        '\n\n## 工具使用指南'
         '1. 查询状态：当用户请求查询设备状态、灯光亮度、颜色等信息时，'
         '   调用 get_lamp_status 获取最新状态，并用中文友好地展示关键信息。'
         '   重点关注：电源状态、亮度、色温、颜色模式。'
@@ -71,13 +77,19 @@ class BedsideLampAgent:
         '   常用颜色参考：红色(255,0,0)、绿色(0,255,0)、蓝色(0,0,255)、'
         '   黄色(255,255,0)、紫色(128,0,128)、粉色(255,192,203)。'
         ''
-        '6. 场景模式：支持四种预设场景'
+        '6. 场景模式（无历史偏好时的默认值）：'
         '   - "阅读模式/看书"：使用 set_lamp_scene(scene="reading") - 100%亮度，4000K中性光'
         '   - "睡眠模式/睡觉"：使用 set_lamp_scene(scene="sleep") - 10%亮度，2000K暖光'
         '   - "浪漫模式/约会"：使用 set_lamp_scene(scene="romantic") - 30%亮度，粉红色'
         '   - "夜灯模式/起夜"：使用 set_lamp_scene(scene="night") - 5%亮度，1700K极暖光'
         ''
-        '始终用友好、简洁的中文回复用户，优先展示用户最关心的信息。'
+        '始终用友好、简洁的中文回复用户，告知用户是按其历史习惯还是默认参数执行的。'
+        '\n\n## 操作记录（重要）'
+        '每次成功执行设备控制后（开关、调光、调色温、设置颜色、切换场景），'
+        '必须调用 record_device_operation 工具将本次操作记录到数据库，'
+        '参数包括：action（操作名）、parameters（参数字典）、success=true、response（结果描述）。'
+        '此记录是系统学习用户习惯的数据来源，不可省略。'
+        '若设备操作失败，也应以 success=false 和 error_message 记录失败原因。'
     )
 
     def __init__(self):
@@ -90,7 +102,9 @@ class BedsideLampAgent:
             set_lamp_brightness,
             set_lamp_color_temp,
             set_lamp_color,
-            set_lamp_scene
+            set_lamp_scene,
+            query_user_lamp_preferences,
+            record_device_operation,
         ]
 
         self._refresh_runtime_config(force=True)
@@ -167,30 +181,25 @@ class BedsideLampAgent:
         current_state = self.graph.get_state(config)
         messages = current_state.values.get('messages') if hasattr(current_state, 'values') else None
 
-        if isinstance(messages, list) and messages:
-            for msg in reversed(messages):
-                if isinstance(msg, ToolMessage):
-                    tool_text = self._extract_text_from_message(msg)
-                    if tool_text:
-                        return {
-                            'is_task_complete': True,
-                            'require_user_input': False,
-                            'content': tool_text,
-                        }
-
-        final_text = ''
-        if isinstance(messages, list) and messages:
-            final_text = self._extract_text_from_message(messages[-1])
-
-        if not final_text:
+        if not isinstance(messages, list) or not messages:
             return {
                 'is_task_complete': False,
                 'require_user_input': True,
                 'content': '当前无法处理您的请求，请稍后重试。',
             }
 
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                text = self._extract_text_from_message(msg)
+                if text:
+                    return {
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': text,
+                    }
+
         return {
-            'is_task_complete': True,
-            'require_user_input': False,
-            'content': final_text,
+            'is_task_complete': False,
+            'require_user_input': True,
+            'content': '当前无法处理您的请求，请稍后重试。',
         }

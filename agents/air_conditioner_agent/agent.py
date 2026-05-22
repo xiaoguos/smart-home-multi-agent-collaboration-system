@@ -11,7 +11,7 @@ from pathlib import Path
 
 dotenv.load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=True)
 
-from tools import get_ac_status, set_ac_power, set_ac_temperature
+from tools import get_ac_status, set_ac_power, set_ac_temperature, query_user_ac_preferences, record_device_operation
 
 memory = MemorySaver()
 
@@ -51,14 +51,25 @@ class AirConditionerAgent:
         '当用户请求查询设备状态时，一定要调用工具 get_ac_status 获取最新状态，并将结果直接返回给用户；如工具返回 JSON，请原样返回或提取关键字段用中文概述。'
         '当用户请求"启动/打开/关闭空调"等同义表达时，必须调用 set_ac_power(power: bool) 工具执行，并向用户反馈执行结果。'
         '当用户请求设置温度（如"调到26度/设置到23℃"）时，必须调用 set_ac_temperature(temperature: int) 工具执行；如用户未给出明确温度，先向用户确认目标温度（范围16-30℃）。'
-        '\n\n## 智能温度调节'
+        '\n\n## 个性化偏好查询（重要）'
+        '当用户以场景或意图描述需求（如"睡觉了"、"起床了"、"回家了"、"运动完了"、"工作中"），'
+        '且未明确给出温度数值时，必须先调用 query_user_ac_preferences(scene=场景描述) '
+        '获取该用户的历史习惯偏好，再按偏好结果决策温度和模式。'
+        '若数据挖掘返回 available=false 或无历史数据，则使用下方默认温度调节规则。'
+        '\n\n## 智能温度调节（无历史偏好时的默认规则）'
         '当用户以语义描述温感（如"有点热/太热/冷一点/暖一点/舒服点/睡觉用"）而未给出具体温度时，按以下规则自动设置人类适宜温度：'
         '1) 先调用 get_ac_status 获取当前 power、mode、tar_temp；若电源关闭且需要调温，先调用 set_ac_power(true)。'
         '2) 若 mode 为 制冷/自动 且用户表达"有点热/太热/降温/冷一点"，将目标温度在当前基础上降低1-2℃（默认2℃），不低于24℃；若表达"有点冷/太冷/升温/暖一点"，则提高1-2℃（默认2℃），不高于30℃，然后调用 set_ac_temperature。'
         '3) 若 mode 为 制热 且用户表达"有点冷/太冷/升温/暖一点"，在当前基础上提高1-2℃（默认2℃），不高于26℃；若表达"有点热/太热/降温/冷一点"，则降低1-2℃（默认2℃），不低于16℃，然后调用 set_ac_temperature。'
         '4) 若用户表达"舒适/舒服点"，则：制冷模式设为26℃，制热模式设为22℃；若无法判断模式，则先查询状态后按模式执行。'
         '5) 若用户表达"睡觉/睡眠"，则：制冷模式设为27℃，制热模式设为21℃。'
-        '所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明采用了哪条规则与最终温度。'
+        '所有自动推断出的目标温度都必须限制在16-30℃区间内。设置完成后，用中文简要说明是按用户习惯还是默认规则执行的，以及最终温度。'
+        '\n\n## 操作记录（重要）'
+        '每次成功执行设备控制后（开关机、设置温度），'
+        '必须调用 record_device_operation 工具将本次操作记录到数据库，'
+        '参数包括：action（操作名）、parameters（参数字典）、success=true、response（结果描述）。'
+        '此记录是系统学习用户习惯的数据来源，不可省略。'
+        '若设备操作失败，也应以 success=false 和 error_message 记录失败原因。'
         '\n\n如果用户询问与智能设备管理或空调控制无关的内容，请礼貌地说明你只能协助处理智能设备相关的问题。'
     )
 
@@ -67,7 +78,7 @@ class AirConditionerAgent:
         self._prompt_signature: str | None = None
 
         from tools import list_devices
-        self.tools = [get_ac_status, set_ac_power, set_ac_temperature, list_devices]
+        self.tools = [get_ac_status, set_ac_power, set_ac_temperature, list_devices, query_user_ac_preferences, record_device_operation]
 
         self._refresh_runtime_config(force=True)
 
@@ -144,34 +155,28 @@ class AirConditionerAgent:
         current_state = self.graph.get_state(config)
         messages = current_state.values.get('messages') if hasattr(current_state, 'values') else None
 
-        # 优先返回最近一次工具消息内容
-        if isinstance(messages, list) and messages:
-            for msg in reversed(messages):
-                if isinstance(msg, ToolMessage):
-                    tool_text = self._extract_text_from_message(msg)
-                    if tool_text:
-                        return {
-                            'is_task_complete': True,
-                            'require_user_input': False,
-                            'content': tool_text,
-                        }
-
-        # 回退到最后一条 AI 消息
-        final_text = ''
-        if isinstance(messages, list) and messages:
-            last_msg = messages[-1]
-            final_text = self._extract_text_from_message(last_msg)
-
-        if not final_text:
+        if not isinstance(messages, list) or not messages:
             return {
                 'is_task_complete': False,
                 'require_user_input': True,
                 'content': '当前无法处理您的请求，请稍后重试。',
             }
 
+        # LangGraph react agent 执行完毕后最后一条消息一定是 AIMessage
+        # 取最后一条 AIMessage 作为最终回复，避免把历史 ToolMessage 当作响应
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                text = self._extract_text_from_message(msg)
+                if text:
+                    return {
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': text,
+                    }
+
         return {
-            'is_task_complete': True,
-            'require_user_input': False,
-            'content': final_text,
+            'is_task_complete': False,
+            'require_user_input': True,
+            'content': '当前无法处理您的请求，请稍后重试。',
         }
 

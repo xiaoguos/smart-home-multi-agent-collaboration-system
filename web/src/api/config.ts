@@ -166,8 +166,10 @@ export async function createAIModel(
 
 // ==================== Agent 管理 ====================
 
-export async function getAgents(isEnabled?: boolean): Promise<Agent[]> {
-  const params = isEnabled !== undefined ? { is_enabled: isEnabled } : {};
+export async function getAgents(isEnabled?: boolean, forChat?: boolean): Promise<Agent[]> {
+  const params: Record<string, unknown> = {};
+  if (isEnabled !== undefined) params.is_enabled = isEnabled;
+  if (forChat) params.for_chat = true;
   return await httpClient.get('/api/v1/config/agents', { params });
 }
 

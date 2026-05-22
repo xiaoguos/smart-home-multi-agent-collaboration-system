@@ -178,7 +178,7 @@ const Chat: React.FC = () => {
 
   const loadEnabledAgents = async () => {
     try {
-      const agents = await getAgents(true);
+      const agents = await getAgents(true, true);
       setEnabledAgents(agents);
 
       if (!agents.length) {
@@ -834,7 +834,9 @@ const Chat: React.FC = () => {
             onChange={(code) => setNewConversationAgentCode(code)}
             options={enabledAgents.map((agent) => ({
               value: agent.agent_code,
-              label: `${agent.agent_name} (${agent.agent_code})`,
+              label: agent.agent_code === "conductor"
+                ? `⭐ ${agent.agent_name}（主Agent）`
+                : `${agent.agent_name} (${agent.agent_code})`,
             }))}
             placeholder="选择Agent"
             style={{ width: "100%" }}

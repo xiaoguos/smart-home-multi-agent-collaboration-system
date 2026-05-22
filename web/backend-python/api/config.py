@@ -444,11 +444,11 @@ async def create_ai_model(data: AIModelCreate):
 # ==================== Agent 管理 ====================
 
 @router.get("/agents", response_model=List[AgentResponse])
-async def get_agents(is_enabled: Optional[bool] = None):
-    """获取Agent配置列表"""
+async def get_agents(is_enabled: Optional[bool] = None, for_chat: bool = False):
+    """获取Agent配置列表。for_chat=true 时包含主Agent（conductor）并排在首位。"""
     try:
         config_service = get_config_service()
-        agents = config_service.get_agents(is_enabled)
+        agents = config_service.get_agents(is_enabled, for_chat=for_chat)
         return agents
     except Exception as e:
         logger.error(f"获取Agent配置失败: {e}")
