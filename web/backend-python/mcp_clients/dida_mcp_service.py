@@ -82,9 +82,23 @@ class DidaMCPService:
             if env_vars:
                 env.update(env_vars)
 
+            # 设置 PYTHONPATH，确保子进程能正确解析 didatodolist-mcp 内的本地模块
+            import sys as _sys
+            path_sep = ";" if _sys.platform == "win32" else ":"
+            mcp_dir = str(self.mcp_path.parent)
+            existing_pythonpath = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{mcp_dir}{path_sep}{existing_pythonpath}" if existing_pythonpath else mcp_dir
+
+            # 优先使用 mcp_server venv 的 Python，否则回退到系统 Python
+            if _sys.platform == "win32":
+                venv_python = self.mcp_path.parent.parent.parent / ".venv" / "Scripts" / "python.exe"
+            else:
+                venv_python = self.mcp_path.parent.parent.parent / ".venv" / "bin" / "python"
+            python_cmd = str(venv_python) if venv_python.exists() else "python"
+
             # 创建 MCP 客户端
             server_params = StdioServerParameters(
-                command="python",
+                command=python_cmd,
                 args=[str(self.mcp_path)],
                 env=env,
             )
