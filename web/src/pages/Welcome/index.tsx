@@ -69,13 +69,6 @@ const Welcome: React.FC = () => {
     username: string;
     password: string;
   }) => {
-    if (isDevSkipAuth) {
-      const user = buildDevMockUser({ username: values.username });
-      saveUserInfo('dev-mock-token', user);
-      message.success('开发环境：已跳过登录接口，进入对话');
-      navigate('/chat');
-      return;
-    }
 
     try {
       const response = await login({
@@ -111,17 +104,6 @@ const Welcome: React.FC = () => {
     email?: string;
     nickname?: string;
   }) => {
-    if (isDevSkipAuth) {
-      const user = buildDevMockUser({
-        username: values.username,
-        nickname: values.nickname,
-      });
-      saveUserInfo('dev-mock-token', user);
-      message.success('开发环境：已跳过注册接口，进入对话');
-      navigate('/chat');
-      return;
-    }
-
     try {
       const response = await register({
         username: values.username,

@@ -20,7 +20,7 @@ class DidaMCPService:
         backend_dir = current_dir.parent  # app/backend-python
         app_dir = backend_dir.parent  # app
         project_root = app_dir.parent  # project root
-        self.mcp_path = project_root / "mcp" / "didatodolist-mcp" / "main.py"
+        self.mcp_path = project_root / "mcp_server" / "didatodolist-mcp" / "main.py"
 
         logger.info(f"滴答清单 MCP 服务路径: {self.mcp_path}")
 
