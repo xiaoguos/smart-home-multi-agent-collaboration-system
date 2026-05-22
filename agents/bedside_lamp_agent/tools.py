@@ -374,7 +374,7 @@ def record_device_operation(
             "execution_time": execution_time or None,
         }
         resp = httpx.post(
-            f"{BACKEND_URL}/api/device_operations/save",
+            f"{BACKEND_URL}/api/v1/device_operations/save",
             json=payload,
             timeout=10.0,
         )
