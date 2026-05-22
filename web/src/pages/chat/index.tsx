@@ -642,7 +642,7 @@ const Chat: React.FC = () => {
       const MarkdownComponent = Markdown as any;
       return (
         <div className="markdown-content">
-          <MarkdownComponent remarkPlugins={[remarkGfm]}>
+          <MarkdownComponent remarkPlugins={[[remarkGfm, { singleTilde: false }]]}>
             {content}
           </MarkdownComponent>
         </div>

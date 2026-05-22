@@ -89,14 +89,8 @@ class DidaMCPService:
             existing_pythonpath = env.get("PYTHONPATH", "")
             env["PYTHONPATH"] = f"{mcp_dir}{path_sep}{existing_pythonpath}" if existing_pythonpath else mcp_dir
 
-            # 优先使用 mcp_server venv 的 Python（mcp_server/.venv），否则回退到系统 Python
-            # mcp_path: .../mcp_server/didatodolist-mcp/main.py
-            # mcp_path.parent.parent = .../mcp_server
-            if _sys.platform == "win32":
-                venv_python = self.mcp_path.parent.parent / ".venv" / "Scripts" / "python.exe"
-            else:
-                venv_python = self.mcp_path.parent.parent / ".venv" / "bin" / "python"
-            python_cmd = str(venv_python) if venv_python.exists() else "python"
+            # 始终使用后端自身的 Python 解释器，保证依赖（pytz 等）一致可用
+            python_cmd = _sys.executable
 
             # 创建 MCP 客户端
             server_params = StdioServerParameters(

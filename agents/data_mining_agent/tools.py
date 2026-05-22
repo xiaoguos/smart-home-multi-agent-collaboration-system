@@ -459,11 +459,12 @@ def query_user_scene_habits(
                 print(f"\n💡 【生成推荐】")
                 recommendation = generate_recommendation_with_confidence(matched_scene)
                 if recommendation:
-                    print(f"   ✓ 推荐已生成，包含 {len(recommendation.get('device_operations', []))} 个设备操作")
-                    for idx, op in enumerate(recommendation.get('device_operations', []), 1):
-                        confidence = op.get('confidence_score', 0)
-                        confidence_emoji = "🟢" if confidence > 0.7 else "🟡" if confidence > 0.5 else "🔴"
-                        print(f"      {idx}. {op['device_type']}.{op['action']} {confidence_emoji} (置信度: {confidence:.2f})")
+                    suggested = recommendation.get('suggested_actions', [])
+                    print(f"   ✓ 推荐已生成，包含 {len(suggested)} 个设备操作")
+                    for idx, op in enumerate(suggested, 1):
+                        confidence = op.get('confidence', 0)
+                        confidence_emoji = "🟢" if confidence > 0.7 else "🟡" if confidence > 0.4 else "🔴"
+                        print(f"      {idx}. {op['device_type']}.{op['action']} {confidence_emoji} (置信度: {confidence:.2f}, 频次: {op.get('frequency',0)}次)")
                         if op.get('parameters'):
                             params_str = ', '.join([f"{k}={v}" for k, v in list(op['parameters'].items())[:2]])
                             print(f"         参数: {params_str}")
