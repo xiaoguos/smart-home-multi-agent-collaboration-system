@@ -6,7 +6,7 @@ from services.device_operation_service import get_device_operation_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/device_operations", tags=["设备操作"])
+router = APIRouter(prefix="/device_operations", tags=["设备操作"])
 
 
 class OperationRecordRequest(BaseModel):
