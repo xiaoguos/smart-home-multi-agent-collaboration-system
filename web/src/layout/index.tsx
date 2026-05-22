@@ -19,6 +19,7 @@ export const RootLayout: React.FC = () => {
       { key: "model-config", label: "模型配置" },
       { key: "agent-config", label: "Agent配置" },
       { key: "plugin-config", label: "插件菜单" },
+      { key: "knowledge", label: "知识库" },
       {
         key: "devices",
         label: "设备",
@@ -54,6 +55,7 @@ export const RootLayout: React.FC = () => {
     else if (key === "model-config") navigate("/models");
     else if (key === "agent-config") navigate("/agents");
     else if (key === "plugin-config") navigate("/plugins");
+    else if (key === "knowledge") navigate("/knowledge");
     else if (key === "devices-local") navigate("/devices/local");
     else if (key === "devices-mihome") navigate("/devices/mihome");
     else if (key === "claw-open") navigate("/claw/open");
@@ -67,6 +69,7 @@ export const RootLayout: React.FC = () => {
     if (path.startsWith("/models")) return ["model-config"];
     if (path.startsWith("/agents")) return ["agent-config"];
     if (path.startsWith("/plugins")) return ["plugin-config"];
+    if (path.startsWith("/knowledge")) return ["knowledge"];
     if (path.startsWith("/devices/local")) return ["devices-local"];
     if (path.startsWith("/devices/mihome")) return ["devices-mihome"];
     if (path.startsWith("/claw/open")) return ["claw-open"];

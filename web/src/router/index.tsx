@@ -8,6 +8,7 @@ import {
   LocalDeviceSettings,
   MihomeDeviceSettings,
   PluginMenuSettings,
+  KnowledgeSettings,
 } from "@/pages/settings";
 import Chat from "@/pages/chat";
 import About from "@/pages/about";
@@ -139,6 +140,20 @@ export const router = createBrowserRouter([
                   {
                     index: true,
                     element: <PluginMenuSettings />,
+                  },
+                  {
+                    path: "*",
+                    ...notFoundRoute,
+                  },
+                ],
+              },
+              {
+                path: "knowledge",
+                element: <ConfigLayout />,
+                children: [
+                  {
+                    index: true,
+                    element: <KnowledgeSettings />,
                   },
                   {
                     path: "*",

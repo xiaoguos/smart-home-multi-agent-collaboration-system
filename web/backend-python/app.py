@@ -21,6 +21,7 @@ from api.dida_auth import router as dida_router
 from api.auth import router as auth_router
 from api.conversation import router as conversation_router
 from api.device_operations import router as device_operations_router
+from api.knowledge_base import router as knowledge_base_router
 import database
 from database import init_database, DatabaseConnectionError
 
@@ -70,6 +71,7 @@ app.include_router(xiaomi_router, prefix="/api/v1/xiaomi", tags=["Xiaomi Auth"])
 app.include_router(dida_router, prefix="/api/v1/dida", tags=["Dida Auth"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(device_operations_router, prefix="/api/v1", tags=["Device Operations"])
+app.include_router(knowledge_base_router, prefix="/api/v1", tags=["Knowledge Base"])
 
 
 @app.get("/")

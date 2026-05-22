@@ -28,5 +28,7 @@ export function isValidAppPath(pathname: string): boolean {
 
   if (p === "/claw" || /^\/claw\/(open|zero)$/.test(p)) return true;
 
+  if (p === "/knowledge") return true;
+
   return false;
 }

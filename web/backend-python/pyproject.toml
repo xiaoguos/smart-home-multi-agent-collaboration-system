@@ -25,6 +25,8 @@ dependencies = [
     "jieba>=0.42.1",
     "pandas>=2.3.3",
     "matplotlib>=3.10.9",
+    "chromadb>=0.6.0",
+    "langchain-text-splitters>=0.3.0",
 ]
 
 [project.scripts]

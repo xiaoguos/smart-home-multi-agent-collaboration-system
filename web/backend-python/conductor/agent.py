@@ -40,6 +40,7 @@ from conductor.esp32_audio_tools import (
     list_esp32_audio_mcp_tools,
     invoke_esp32_audio_mcp_tool,
 )
+from conductor.rag_tool import query_knowledge_base
 
 memory = MemorySaver()
 
@@ -57,6 +58,7 @@ _CORE_TOOL_NAMES: FrozenSet[str] = frozenset(
         "analyze_user_behavior",
         "get_user_insights",
         "query_data_mining_agent",
+        "query_knowledge_base",
         "search_baidu_ai",
         "manage_windows_app",
         "execute_powershell_command",
@@ -220,6 +222,7 @@ class ConductorAgent:
             analyze_user_behavior,
             get_user_insights,
             query_data_mining_agent,
+            query_knowledge_base,
             list_xiaomi_devices,
             search_baidu_ai,
             manage_dida_task,
