@@ -17,6 +17,7 @@ dependencies = [
     "requests>=2.31.0",
     "Pillow>=10.0.0",
     "fastmcp>=3.2.3",
+    "pytz>=2024.1",
     "a2a-sdk[all]>=1.0.3",
     "langchain-core>=0.3",
     "langchain-openai>=0.3",
