@@ -199,7 +199,7 @@ const Welcome: React.FC = () => {
 
               <div className="welcome-text">
                 <Title level={1} className="welcome-title">
-                  欢迎使用 Moss AI
+                  欢迎使用智能管家系统
                 </Title>
                 <Paragraph className="welcome-description">
                   您的智能AI助手，随时为您提供帮助和支持

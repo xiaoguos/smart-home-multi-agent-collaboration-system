@@ -258,7 +258,7 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     Modal.confirm({
       title: "确认解绑小米账号",
       icon: <ExclamationCircleOutlined />,
-      content: "解绑后，将无法通过 Moss AI 助手控制小米智能家居设备。您确定要解绑吗？",
+      content: "解绑后，将无法通过智能管家系统 助手控制小米智能家居设备。您确定要解绑吗？",
       okText: "确认解绑",
       okType: "danger",
       cancelText: "取消",
@@ -282,7 +282,7 @@ const BindingSection: React.FC<BindingSectionProps> = ({ userInfo }) => {
     Modal.confirm({
       title: "确认解绑滴答清单账号",
       icon: <ExclamationCircleOutlined />,
-      content: "解绑后，将无法通过 Moss AI 助手管理您的滴答清单任务。您确定要解绑吗？",
+      content: "解绑后，将无法通过智能管家系统 助手管理您的滴答清单任务。您确定要解绑吗？",
       okText: "确认解绑",
       okType: "danger",
       cancelText: "取消",

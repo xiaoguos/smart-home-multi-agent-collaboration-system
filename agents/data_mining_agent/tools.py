@@ -23,7 +23,7 @@ def get_db_config() -> dict:
         "port": int(os.getenv("DATABASE_PORT", "9030")),
         "user": os.getenv("DATABASE_USER", "root"),
         "password": os.getenv("DATABASE_PASSWORD", ""),
-        "database": os.getenv("DATABASE_NAME", "smart_home"),
+        "database": os.getenv("DATABASE_NAME", "moss_ai"),
         "charset": os.getenv("DATABASE_CHARSET", "utf8mb4"),
     }
 
@@ -61,7 +61,7 @@ def get_db_connection():
             port=db_config.get("port", 9030),
             user=db_config.get("user", "root"),
             password=db_config.get("password", ""),
-            database=db_config.get("database", "smart_home"),
+            database=db_config.get("database", "moss_ai"),
             charset=db_config.get("charset", "utf8mb4"),
             cursorclass=DictCursor,
             autocommit=True,
