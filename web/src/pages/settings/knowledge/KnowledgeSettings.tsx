@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Button, Card, Col, Collapse, Form, Input, message, Modal,
   Popconfirm, Row, Select, Space, Statistic, Table, Tag, Typography, Upload,
@@ -26,7 +26,7 @@ const KnowledgeSettings: React.FC = () => {
   const [docs, setDocs] = useState<KBDocument[]>([]);
   const [stats, setStats] = useState<KBStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [_statsLoading, setStatsLoading] = useState(false);
 
   // 添加文档 modal
   const [addOpen, setAddOpen] = useState(false);
@@ -283,7 +283,7 @@ const KnowledgeSettings: React.FC = () => {
 
           {queryResults.length > 0 && (
             <div>
-              {queryResults.map((r, i) => (
+              {queryResults.map((r, _i) => (
                 <Card
                   key={`${r.doc_id}_${r.chunk_index}`}
                   size="small"

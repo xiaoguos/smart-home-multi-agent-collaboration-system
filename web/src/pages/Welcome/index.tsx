@@ -30,25 +30,10 @@ import {
   saveUserInfo,
   isLoggedIn,
 } from '@api/auth';
-import type { UserInfo } from '@api/auth';
 import './styles/index.sass';
 
 const { Title, Paragraph } = Typography;
 
-/** 开发环境跳过真实登录/注册接口，仅写入本地模拟会话 */
-const isDevSkipAuth = import.meta.env.DEV;
-
-function buildDevMockUser(partial: {
-  username: string;
-  nickname?: string;
-}): UserInfo {
-  return {
-    id: 1,
-    username: partial.username,
-    nickname: partial.nickname ?? partial.username,
-    created_at: new Date().toISOString(),
-  };
-}
 
 const Welcome: React.FC = () => {
   const navigate = useNavigate();
