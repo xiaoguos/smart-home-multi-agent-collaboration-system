@@ -1,8 +1,8 @@
-# MOSS AI - 智能家居多Agent协作系统
+# Smart Home Multi-Agent Collaboration System - 智能家居多Agent协作系统
 
 <div align="center">
 
-![MOSS AI Logo](https://img.shields.io/badge/MOSS-AI-blue?style=for-the-badge&logo=robot)
+![Smart Home Multi-Agent Collaboration System Logo](https://img.shields.io/badge/Smart_Home_Multi--Agent_Collaboration_System-blue?style=for-the-badge&logo=robot)
 ![Python](https://img.shields.io/badge/Python-3.11+-green?style=for-the-badge&logo=python)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue?style=for-the-badge&logo=docker)
 ![LangChain](https://img.shields.io/badge/LangChain-Integrated-orange?style=for-the-badge&logo=chainlink)
@@ -15,7 +15,7 @@
 
 ## 📖 项目简介
 
-MOSS AI是一款创新的智能家居多Agent协作系统，通过多个专业化的AI代理协同工作，为用户提供智能化的家居控制体验。系统采用先进的LangChain框架和A2A（Agent-to-Agent）通信协议，实现设备控制、数据分析、用户行为学习等全方位智能服务。
+Smart Home Multi-Agent Collaboration System是一款创新的智能家居多Agent协作系统，通过多个专业化的AI代理协同工作，为用户提供智能化的家居控制体验。系统采用先进的LangChain框架和A2A（Agent-to-Agent）通信协议，实现设备控制、数据分析、用户行为学习等全方位智能服务。
 
 ### 🎯 核心价值
 
@@ -147,8 +147,8 @@ graph TB
 
 ```bash
 # 1. 克隆项目
-git clone https://gitee.com/wdep/moss-ai.git
-cd moss-ai
+git clone https://gitee.com/wdep/moss-ai.git smart-home-multi-agent-collaboration-system
+cd smart-home-multi-agent-collaboration-system
 
 ```
 
@@ -254,7 +254,7 @@ pnpm tauri build  # 构建生产版本
 ### app构建
 ```bash
 # 进入到app目录
-cd moss-ai/app
+cd smart-home-multi-agent-collaboration-system/app
 # 执行build命令
 docker build -f app.Dockerfile -t moss-ai-app:latest .
 ```
@@ -263,7 +263,7 @@ docker build -f app.Dockerfile -t moss-ai-app:latest .
 ```bash
 
 # 进入到app目录
-cd moss-ai/app/backend-python
+cd smart-home-multi-agent-collaboration-system/app/backend-python
 
 # 执行build命令
 docker build -f backend.Dockerfile -t moss-ai-backend:latest .
@@ -318,7 +318,7 @@ docker run -d \
 <div align="center">
 <img src="image.png" alt="微信交流群" width="300"/>
 
-*扫码加入MOSS AI技术交流群*
+*扫码加入Smart Home Multi-Agent Collaboration System技术交流群*
 </div>
 
 ## 🔮 路线图
@@ -361,7 +361,7 @@ docker run -d \
 
 **⭐ 如果这个项目对您有帮助，请给我们一个Star！**
 
-Made with ❤️ by MOSS AI Team
+Made with ❤️ by Smart Home Multi-Agent Collaboration System Team
 
 </div>
 

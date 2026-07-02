@@ -1,4 +1,4 @@
-# Moss AI Backend Python Dockerfile
+# Smart Home Multi-Agent Collaboration System Backend Python Dockerfile
 FROM python:3.11-slim
 
 # 设置工作目录

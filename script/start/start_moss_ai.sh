@@ -254,8 +254,8 @@ start_service() {
 }
 
 start_all_services() {
-    print_section "正在启动 Moss AI 本地开发环境...
-Starting Moss AI Local Development Environment..."
+    print_section "正在启动 Smart Home Multi-Agent Collaboration System 本地开发环境...
+Starting Smart Home Multi-Agent Collaboration System Local Development Environment..."
     
     # 定义服务配置：index|name_cn|name_en|directory|command|port_key|delay
     local services=(

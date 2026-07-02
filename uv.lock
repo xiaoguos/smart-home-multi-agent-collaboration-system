@@ -575,7 +575,7 @@ wheels = [
 ]
 
 [[package]]
-name = "moss-ai"
+name = "smart-home-multi-agent-collaboration-system"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [

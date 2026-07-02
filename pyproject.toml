@@ -1,7 +1,7 @@
 [project]
-name = "moss-ai"
+name = "smart-home-multi-agent-collaboration-system"
 version = "1.0.0"
-description = "Moss AI 智能家居系统"
+description = "Smart Home Multi-Agent Collaboration System 智能家居系统"
 readme = "README.md"
 dependencies = [
     # FastMCP

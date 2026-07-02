@@ -1,6 +1,6 @@
 from langchain_core.tools import tool
 from miio.miot_device import MiotDevice
-from miio.integrations.airpurifier.zhimi.airpurifier_miot import AirPurifierMiot
+from miio.integrations.zhimi.airpurifier.airpurifier_miot import AirPurifierMiot
 import json
 import os
 import asyncio

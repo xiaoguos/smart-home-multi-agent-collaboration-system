@@ -6,4 +6,4 @@ import stdx.net.http.*
 //     return server;
 // }
 
-public class MossAiServer {}
+public class Smart Home Multi-Agent Collaboration SystemServer {}

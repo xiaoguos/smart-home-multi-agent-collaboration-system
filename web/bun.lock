@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@moss-ai/desktop",
+      "name": "@smart-home-multi-agent/desktop",
       "dependencies": {
         "@ant-design/icons": "^6.1.1",
         "@ant-design/x": "^1.6.1",

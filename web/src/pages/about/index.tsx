@@ -128,7 +128,7 @@ const About: React.FC = () => {
         <div className="hero-content">
           <Avatar size={80} icon={<RobotOutlined />} className="hero-avatar" />
           <Title level={1} className="hero-title">
-            MOSS AI
+            Smart Home Multi-Agent Collaboration System
           </Title>
           <Title level={3} className="hero-subtitle">
             智能家居多Agent协作系统

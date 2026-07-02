@@ -86,8 +86,7 @@ function Test-Environment {
     $checks = @(
         @{ Command = "python"; Name = "Python"; Hint = "请安装 Python 3.8+ / Please install Python 3.8+" },
         @{ Command = "node"; Name = "Node.js"; Hint = "请安装 Node.js 16+ / Please install Node.js 16+" },
-        @{ Command = "pnpm"; Name = "pnpm"; Hint = "请运行: npm install -g pnpm" },
-        @{ Command = "uv"; Name = "uv"; Hint = "请运行: pip install uv 或访问 https://docs.astral.sh/uv/" }
+        @{ Command = "pnpm"; Name = "pnpm"; Hint = "请运行: npm install -g pnpm" }
     )
     
     $allPassed = $true
@@ -152,6 +151,7 @@ function Initialize-Config {
         @{ Pattern = "conductor:[\s\S]*?port:\s*(\d+)"; Key = "ConductorPort"; Default = 12000 },
         @{ Pattern = "air_conditioner:[\s\S]*?port:\s*(\d+)"; Key = "AirCondPort"; Default = 12001 },
         @{ Pattern = "air_cleaner:[\s\S]*?port:\s*(\d+)"; Key = "AirCleanPort"; Default = 12002 },
+        @{ Pattern = "data_mining:[\s\S]*?port:\s*(\d+)"; Key = "DataMiningPort"; Default = 12003 },
         @{ Pattern = "bedside_lamp:[\s\S]*?port:\s*(\d+)"; Key = "BedsideLampPort"; Default = 12004 }
     )
     
@@ -184,43 +184,39 @@ function Initialize-Directories {
 # 环境准备模块 - Python虚拟环境和依赖
 # ========================================
 function Initialize-PythonEnvironment {
-    Write-Step "检查 Python 虚拟环境..." "Checking Python virtual environment..."
-    
-    if (-not (Test-Path ".venv")) {
-        Write-ColorText "✗ 虚拟环境不存在，正在创建..." "Yellow"
-        Write-ColorText "  执行: uv venv" "Gray"
-        & uv venv
-        
-        if ($LASTEXITCODE -ne 0) {
-            Write-ColorText "✗ 虚拟环境创建失败！" "Red"
-            throw "Virtual environment creation failed"
+    Write-Step "准备 Python 子项目环境..." "Preparing Python project environments..."
+
+    $pythonProjects = @(
+        "web\backend-python",
+        "agents\conductor_agent",
+        "agents\air_conditioner_agent",
+        "agents\air_cleaner_agent",
+        "agents\data_mining_agent",
+        "agents\bedside_lamp_agent"
+    )
+
+    foreach ($project in $pythonProjects) {
+        Write-ColorText "  执行: python -m uv sync ($project)" "Gray"
+        Push-Location $project
+        & python -m uv sync
+        $syncExitCode = $LASTEXITCODE
+        Pop-Location
+
+        if ($syncExitCode -ne 0) {
+            Write-ColorText "✗ Python 依赖安装失败: $project" "Red"
+            throw "Python dependencies installation failed: $project"
         }
-        Write-ColorText "✓ 虚拟环境创建完成" "Green"
-    }
-    else {
-        Write-ColorText "✓ 虚拟环境已存在" "Green"
-    }
-    
-    Write-Host ""
-    Write-Step "安装 Python 依赖..." "Installing Python dependencies..."
-    Write-ColorText "  执行: uv sync" "Gray"
-    & uv sync
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-ColorText "✗ Python 依赖安装失败！" "Red"
-        throw "Python dependencies installation failed"
     }
     Write-ColorText "✓ Python 依赖已安装" "Green"
 }
-
 function Initialize-FrontendDependencies {
     Write-Step "检查前端依赖..." "Checking frontend dependencies..."
     
-    if (-not (Test-Path "app\node_modules")) {
+    if (-not (Test-Path "web\node_modules")) {
         Write-ColorText "✗ 前端依赖未安装，正在安装..." "Yellow"
         Write-Host ""
         
-        Push-Location "app"
+        Push-Location "web"
         Write-ColorText "  执行: pnpm install" "Gray"
         & pnpm install
         
@@ -251,8 +247,8 @@ function Start-ServiceProcess {
         [int]$Delay
     )
     
-    Write-ColorText "[$Index/6] 启动$NameCN (端口 $Port)..." "Cyan"
-    Write-ColorText "[$Index/6] Starting $NameEN (Port $Port)..." "Cyan"
+    Write-ColorText "[$Index/7] 启动$NameCN (端口 $Port)..." "Cyan"
+    Write-ColorText "[$Index/7] Starting $NameEN (Port $Port)..." "Cyan"
     
     $fullPath = Join-Path $script:ProjectRoot $Directory
     
@@ -275,16 +271,17 @@ function Start-ServiceProcess {
 }
 
 function Start-AllServices {
-    Write-Section "正在启动 Moss AI 本地开发环境...`nStarting Moss AI Local Development Environment..."
+    Write-Section "正在启动 Smart Home Multi-Agent Collaboration System 本地开发环境...`nStarting Smart Home Multi-Agent Collaboration System Local Development Environment..."
     
     # 定义服务配置：Index, NameCN, NameEN, Directory, Command, PortKey, Delay
     $services = @(
-        @{Index=1; NameCN="后端服务"; NameEN="Backend Service"; Dir="app\backend-python"; Cmd="python __main__.py"; PortKey="BackendPort"; Delay=3},
-        @{Index=2; NameCN="总管理代理"; NameEN="Conductor Agent"; Dir="agents\conductor_agent"; Cmd="python __main__.py"; PortKey="ConductorPort"; Delay=3},
-        @{Index=3; NameCN="空调代理"; NameEN="Air Conditioner Agent"; Dir="agents\air_conditioner_agent"; Cmd="python __main__.py"; PortKey="AirCondPort"; Delay=2},
-        @{Index=4; NameCN="空气净化器代理"; NameEN="Air Cleaner Agent"; Dir="agents\air_cleaner_agent"; Cmd="python __main__.py"; PortKey="AirCleanPort"; Delay=2},
-        @{Index=5; NameCN="床头灯代理"; NameEN="Bedside Lamp Agent"; Dir="agents\bedside_lamp_agent"; Cmd="python __main__.py"; PortKey="BedsideLampPort"; Delay=2},
-        @{Index=6; NameCN="前端开发服务器"; NameEN="Frontend Dev Server"; Dir="app"; Cmd="pnpm dev"; PortKey="FrontendPort"; Delay=3}
+        @{Index=1; NameCN="后端服务"; NameEN="Backend Service"; Dir="web\backend-python"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="BackendPort"; Delay=3},
+        @{Index=2; NameCN="总管理代理"; NameEN="Conductor Agent"; Dir="agents\conductor_agent"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="ConductorPort"; Delay=3},
+        @{Index=3; NameCN="空调代理"; NameEN="Air Conditioner Agent"; Dir="agents\air_conditioner_agent"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="AirCondPort"; Delay=2},
+        @{Index=4; NameCN="空气净化器代理"; NameEN="Air Cleaner Agent"; Dir="agents\air_cleaner_agent"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="AirCleanPort"; Delay=2},
+        @{Index=5; NameCN="数据挖掘代理"; NameEN="Data Mining Agent"; Dir="agents\data_mining_agent"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="DataMiningPort"; Delay=2},
+        @{Index=6; NameCN="床头灯代理"; NameEN="Bedside Lamp Agent"; Dir="agents\bedside_lamp_agent"; Cmd=".\.venv\Scripts\python.exe __main__.py"; PortKey="BedsideLampPort"; Delay=2},
+        @{Index=7; NameCN="前端开发服务器"; NameEN="Frontend Dev Server"; Dir="web"; Cmd="pnpm dev"; PortKey="FrontendPort"; Delay=3}
     )
     
     foreach ($service in $services) {

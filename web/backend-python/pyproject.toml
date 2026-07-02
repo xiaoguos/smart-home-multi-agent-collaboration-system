@@ -1,7 +1,7 @@
 [project]
-name = "moss-ai-backend"
+name = "smart-home-multi-agent-backend"
 version = "1.0.0"
-description = "Moss AI 智能家居系统后端服务"
+description = "Smart Home Multi-Agent Collaboration System 智能家居系统后端服务"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.scripts]
-moss-ai-backend = "__main__:main"
+smart-home-multi-agent-backend = "__main__:main"
 
 [build-system]
 requires = ["hatchling"]

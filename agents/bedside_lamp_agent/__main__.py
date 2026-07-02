@@ -51,7 +51,7 @@ def main():
     """Starts the Bedside Lamp Agent server."""
     try:
         host = os.getenv("AGENT_BEDSIDE_LAMP_HOST", "localhost")
-        port = int(os.getenv("AGENT_BEDSIDE_LAMP_PORT", "12003"))
+        port = int(os.getenv("AGENT_BEDSIDE_LAMP_PORT", "12004"))
 
         logger.info(f"📍 Bedside Lamp Agent 启动配置: {host}:{port}")
 

@@ -1,7 +1,7 @@
 [project]
 name = "air-cleaner-agent"
 version = "1.0.0"
-description = "Moss AI 空气净化器控制 Agent"
+description = "Smart Home Multi-Agent Collaboration System 空气净化器控制 Agent"
 readme = "./README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
     "httpx>=0.25.0",
     "PyYAML>=6.0.0",
     "starlette>=0.27.0",
-    "python-miio>=0.5.0",
+    "python-miio==0.6.0.dev0",
     "a2a-sdk[all]>=1.0.3",
     "langchain-core>=1.4.0",
     "langchain-openai>=1.2.1",

@@ -1,6 +1,6 @@
 # Air Conditioner Agent
 
-Moss AI 空调控制系统，专门负责家庭空调系统的智能控制。
+Smart Home Multi-Agent Collaboration System 空调控制系统，专门负责家庭空调系统的智能控制。
 
 ## 功能特性
 

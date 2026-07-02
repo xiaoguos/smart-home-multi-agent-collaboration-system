@@ -1,5 +1,5 @@
 """
-Bedside Lamp Agent - Moss AI 床头灯控制系统
+Bedside Lamp Agent - Smart Home Multi-Agent Collaboration System 床头灯控制系统
 控制 Yeelink 床头灯（yeelink.light.bslamp2）
 """
 

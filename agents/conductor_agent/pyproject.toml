@@ -1,7 +1,7 @@
 [project]
 name = "conductor-agent"
 version = "1.0.0"
-description = "Moss AI 智能家居总管理 Agent"
+description = "Smart Home Multi-Agent Collaboration System 智能家居总管理 Agent"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

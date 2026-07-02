@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -47,9 +47,9 @@ name = "aiologic"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "sniffio", marker = "python_full_version < '3.13'" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
-    { name = "wrapt", marker = "python_full_version < '3.13'" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+    { name = "wrapt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/13/50b91a3ea6b030d280d2654be97c48b6ed81753a50286ee43c646ba36d3c/aiologic-0.16.0.tar.gz", hash = "sha256:c267ccbd3ff417ec93e78d28d4d577ccca115d5797cdbd16785a551d9658858f", size = 225952, upload-time = "2025-11-27T23:48:41.195Z" }
 wheels = [
@@ -91,12 +91,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/94/13/8b084e0f2efb0275a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/29/6533c317b74f707ea28f8d633734dbda2119bbadfc61b2f3640ba835d0f7/alembic-1.18.4-py3-none-any.whl", hash = "sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a", size = 263893, upload-time = "2026-02-10T16:00:49.997Z" },
 ]
-
-[[package]]
-name = "android-backup"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/01/bb/adfb293e9b74528b7cf4b5402fb1ee5507ae2bc4fe339b47e75c48dd5587/android_backup-0.2.0.tar.gz", hash = "sha256:864b6a9f8e2dda7a3af3726df7439052d35781c5f7d50dd771d709293d158b97", size = 6058, upload-time = "2018-06-06T17:25:57.017Z" }
 
 [[package]]
 name = "annotated-types"
@@ -237,7 +231,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=1.2.0" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "python-miio", specifier = ">=0.5.0" },
+    { name = "python-miio", specifier = "==0.6.0.dev0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "starlette", specifier = ">=0.27.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
@@ -539,8 +533,8 @@ name = "culsans"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiologic", marker = "python_full_version < '3.13'" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "aiologic" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d9/e3/49afa1bc180e0d28008ec6bcdf82a4072d1c7a41032b5b759b60814ca4b0/culsans-0.11.0.tar.gz", hash = "sha256:0b43d0d05dce6106293d114c86e3fb4bfc63088cfe8ff08ed3fe36891447fe33", size = 107546, upload-time = "2025-12-31T23:15:38.196Z" }
 wheels = [
@@ -570,7 +564,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [
@@ -1379,12 +1373,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7b/64/e1327477189913bba3e8392a3518c4fa2db14644ea2d0d5e243a018d7752/micloud-0.6.tar.gz", hash = "sha256:46c9e66741410955a9daf39892a7e6c3e24514a46bb126e872b1ddcf6de85138", size = 9429, upload-time = "2022-12-08T09:46:07.566Z" }
 
 [[package]]
-name = "netifaces"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106, upload-time = "2021-05-31T08:33:02.506Z" }
-
-[[package]]
 name = "openai"
 version = "2.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1874,10 +1862,9 @@ wheels = [
 
 [[package]]
 name = "python-miio"
-version = "0.5.12"
+version = "0.6.0.dev0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "android-backup" },
     { name = "appdirs" },
     { name = "attrs" },
     { name = "click" },
@@ -1886,15 +1873,15 @@ dependencies = [
     { name = "cryptography" },
     { name = "defusedxml" },
     { name = "micloud" },
-    { name = "netifaces" },
+    { name = "pydantic" },
     { name = "pytz" },
     { name = "pyyaml" },
     { name = "tqdm" },
     { name = "zeroconf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/8e/7e03014ed96b1d6355b1a9c22690cc7a60db0bb3444fa4a47ef4096b6ce7/python-miio-0.5.12.tar.gz", hash = "sha256:049c351a0dc53b647a5962a392ba710cde1f4cc4ee8390088f448dab58046c16", size = 245520, upload-time = "2022-07-18T21:27:30.43Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/ea/3d8f2a413503135ee73c9226fdf1c929db2fcdb7dbb2632b472147a26c3d/python_miio-0.6.0.dev0.tar.gz", hash = "sha256:ed1428676efe22bf36ecb284ec653b5d6dbd862c4c1111610c2b39d234631890", size = 291154, upload-time = "2024-03-13T17:39:52.49Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f0/26/3aba8af51a7522ef54b8e0adaa34a8ccf7615e6745aa5ac49dd0e855abbc/python_miio-0.5.12-py3-none-any.whl", hash = "sha256:206ac0d8505aa3c673e101543d0a0e8f0ebe8f19a50ff66edd302c8770813f73", size = 330966, upload-time = "2022-07-18T21:27:28.414Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/9b/d4ef97daa977807183f17f5b05846a456b687d7931057596d2aab49fdb1c/python_miio-0.6.0.dev0-py3-none-any.whl", hash = "sha256:04147aea5ba84788cdd00584bd68a4b64cac39d6893ef61d1dabae7004a38497", size = 395716, upload-time = "2024-03-13T17:39:50.15Z" },
 ]
 
 [[package]]

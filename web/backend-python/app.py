@@ -44,11 +44,11 @@ async def lifespan(app: FastAPI):
         sys.exit(1)
 
     yield
-    logger.info("👋 Moss AI 后端服务关闭")
+    logger.info("👋 Smart Home Multi-Agent Collaboration System 后端服务关闭")
 
 
 app = FastAPI(
-    title="Moss AI Backend API",
+    title="Smart Home Multi-Agent Collaboration System Backend API",
     description="智能家居系统后端服务",
     version="1.0.0",
     lifespan=lifespan,
@@ -77,7 +77,7 @@ app.include_router(knowledge_base_router, prefix="/api/v1", tags=["Knowledge Bas
 @app.get("/")
 async def root():
     return {
-        "name": "Moss AI Backend API",
+        "name": "Smart Home Multi-Agent Collaboration System Backend API",
         "version": "1.0.0",
         "status": "运行中",
         "warning": "请浏览正确路径,不要浏览错误路径",

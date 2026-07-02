@@ -8,8 +8,12 @@ import logging
 import sys
 import os
 
-# 添加父目录到路径以导入config_loader
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 复用 Python 后端中的统一配置加载器
+BACKEND_CONDUCTOR_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "web", "backend-python", "conductor")
+)
+if BACKEND_CONDUCTOR_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_CONDUCTOR_DIR)
 from config_loader import get_config_loader
 
 from tools import (

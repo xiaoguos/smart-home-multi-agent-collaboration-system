@@ -51,7 +51,7 @@ def main():
     """Starts the Data Mining Agent server."""
     try:
         host = os.getenv("AGENT_DATA_MINING_HOST", "localhost")
-        port = int(os.getenv("AGENT_DATA_MINING_PORT", "12004"))
+        port = int(os.getenv("AGENT_DATA_MINING_PORT", "12003"))
 
         capabilities = AgentCapabilities(
             push_notifications=False,

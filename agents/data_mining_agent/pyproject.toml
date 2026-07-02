@@ -1,7 +1,7 @@
 [project]
 name = "data-mining-agent"
 version = "1.0.0"
-description = "Moss AI 用户行为数据挖掘与场景分析 Agent"
+description = "Smart Home Multi-Agent Collaboration System 用户行为数据挖掘与场景分析 Agent"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0.0",
